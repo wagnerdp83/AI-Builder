@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "componentName": "Hero",
+  "semanticTag": "section",
+  "placeholders": ["VIDEO_URL", "MOCKUP_IMAGE"],
+  "content": {
+    "headings": ["Salon Experience"],
+    "paragraphs": ["Book your appointment today"],
+    "buttons": ["Book Appointment"]
+  },
+  "lucideIcons": ["Calendar", "User"],
+  "layout": "full",
+  "theme": "default",
+  "interactions": {
+    "hover": true
+  }
+} 

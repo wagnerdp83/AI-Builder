@@ -1,0 +1,111 @@
+
+The user wants a top-tier online fashion boutique website.
+This website should have:
+- Animated product sliders
+- Quick view popups
+- Responsive lookbook pages
+- Top 0.01% UI (Awwwards level)
+- Feature-rich, robust, production-ready
+- Dynamic visual effects
+- Mobile responsive
+- Layered design and depth
+- Strong typographic hierarchy
+- HTML, CSS, JS
+- Tailwind CSS v4
+- Google Fonts
+- Font Awesome Icons
+- Example Images from picsum.photos
+- No comments in code
+- No full SVG, but can use inline SVG
+- No SHA for library imports
+
+Color Palette Thinking:
+Fashion boutique, so needs to be stylish, modern, and sophisticated.
+- Consider a minimalist approach with a neutral base (whites, creams, light greys) to highlight the clothing.
+- Accent colors could be used for interaction elements and branding.
+- Maybe a pastel or muted color palette to keep it elegant and not too loud.
+- Let's choose a soft, desaturated color palette with a focus on visual hierarchy and product presentation.
+
+Typography:
+- Strong typographic hierarchy is requested.
+- Need to select a good Google Font pairing.
+- Headings should be prominent and stylish.
+- Body text should be readable and elegant.
+- Consider a serif font for headings for a classic fashion feel and a sans-serif for body for readability.
+
+UX Focus (from instructions):
+1. **Intuitive Navigation:**
+- Clear categories, maybe dropdowns or mega menus for categories.
+- Prominent search bar.
+- Breadcrumbs for navigation within categories and lookbooks.
+- Mobile-first navigation (tab bar or well-designed hamburger menu).
+2. **Visual Hierarchy & Layout:**
+- High-quality product images are key.
+- Clean and spacious layout.
+- Use cards for product listings and lookbook items.
+- Clear CTAs (Add to cart, Quick View, Shop Now).
+3. **Performance Optimization:**
+- Lazy loading for images is crucial.
+- Optimize CSS and JS.
+- Consider image optimization for web.
+4. **Accessibility Compliance:**
+- Ensure keyboard navigation.
+- Alt text for images.
+- Color contrast for text and backgrounds.
+- Focus states for interactive elements.
+5. **Responsive Design:**
+- Mobile-first approach.
+- Grid layout for product listings and lookbooks.
+- Fluid typography and adaptable components.
+6. **Component Technical Execution:**
+- Product sliders/carousels (JS needed).
+- Quick view popups (modals, JS needed).
+- Lookbook pages (grid/layout, potentially sliders).
+- Forms for newsletter signup, etc.
+7. **Interaction Feedback Logic:**
+- Animations for hover, click, transitions.
+- Smooth scrolling.
+- Feedback for actions (e.g., "Added to cart" animation).
+8. **Conversion Friction Audit:**
+- Streamlined checkout process (though checkout isn't explicitly requested, it's implied for a boutique).
+- Clear pricing and product information.
+- Trust elements (if applicable, though not strictly requested here).
+9. **Future-Proofing Measures:**
+- Keep code modular and maintainable.
+- Use Tailwind effectively for flexibility.
+10. **Edge Case Handling:**
+- Empty states (e.g., no search results, empty cart).
+- Error handling (though not explicitly requested for this UI design).
+
+Animations and Visual Effects:
+- Subtle animations for product sliders, hover states, popups.
+- Consider parallax scrolling for lookbook pages for depth.
+- Smooth transitions for page navigation.
+- Dynamic visual effects - maybe subtle background animations or gradient shifts.
+
+Structure:
+- Header (Logo, Navigation, Search, Cart)
+- Homepage (Hero Slider, Featured Products, Category Previews, Lookbook Teaser, Newsletter Signup)
+- Product Listing Page (Filters, Product Grid, Pagination)
+- Product Detail Page (Product Images, Description, Size/Color Options, Add to Cart, Product Slider)
+- Lookbook Page (Responsive Grid Layout, Image Sliders)
+- Quick View Popup (Product Details, Add to Cart)
+- Footer (About Us, Contact, Social Links, Copyright)
+
+Tools and Libraries:
+- Tailwind CSS v4 (latest from unpkg)
+- Google Fonts (Poppins, Playfair Display - example, can refine)
+- Font Awesome (icons)
+- Vanilla JS for interactivity (sliders, popups, animations)
+
+Let's start by setting up the basic HTML structure with Tailwind and then build components step by step.
+
+Refined Color Palette Idea:
+- Base: #f8f8f8 (light grey), #ffffff (white)
+- Accent 1 (Primary - Interactive elements): #a3b18a (muted sage green)
+- Accent 2 (Secondary - Details): #588157 (darker muted green)
+- Text: #343a40 (dark grey)
+
+Font Pairing:
+- Headings: Playfair Display (Serif, Elegant)
+- Body: Poppins (Sans-serif, Modern, Readable)

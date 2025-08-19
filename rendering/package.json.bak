@@ -1,0 +1,59 @@
+{
+  "name": "real-estate-landing-page-rendering",
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Astro-based landing page renderer for the AI Landing Page Builder",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro check && astro build",
+    "build:simple": "NODE_ENV=production astro build && node scripts/remove-test-pages.js",
+    "build:nocompress": "NODE_ENV=production node scripts/build-no-compress.js && node scripts/remove-test-pages.js",
+    "preview": "astro preview",
+    "astro": "astro",
+    "build:perf": "ASTRO_PREFETCH=true astro build --experimental-prerender && node scripts/minify.js",
+    "perf:test": "node scripts/run-performance-test.js",
+    "templates:test": "astro dev --open /template-tester",
+    "performance:test": "astro dev --open /performance-test",
+    "restore-config": "node scripts/restore-config.js"
+  },
+  "keywords": [
+    "astro",
+    "landing-page",
+    "builder"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@astrojs/check": "^0.5.9",
+    "@astrojs/sitemap": "^3.1.6",
+    "@astrojs/tailwind": "^5.1.0",
+    "@fontsource-variable/inter": "^5.0.18",
+    "@mistralai/mistralai": "^1.7.0",
+    "@typescript-eslint/typescript-estree": "^7.3.1",
+    "astro": "^4.4.15",
+    "astro-critters": "^2.1.0",
+    "astro-icon": "^1.1.0",
+    "fast-glob": "^3.3.2",
+    "micromodal": "^0.6.1",
+    "node-html-parser": "^6.1.13",
+    "preline": "^2.3.0",
+    "sharp": "^0.33.4",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.4.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.10",
+    "@tailwindcss/typography": "^0.5.16",
+    "@types/node": "^20.11.28",
+    "@types/react": "19.1.6",
+    "astro-compress": "^2.2.29",
+    "clean-css-cli": "^5.6.3",
+    "eslint-plugin-astro": "^1.2.2",
+    "glob": "^10.4.2",
+    "prettier": "^3.3.3",
+    "prettier-plugin-astro": "^0.14.1",
+    "terser": "^5.31.3"
+  }
+} 

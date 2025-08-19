@@ -1,0 +1,163 @@
+# DOMAIN SECURITY CONTEXT - CRITICAL FOR ALL LLM REQUESTS
+
+## 🚫 ABSOLUTELY FORBIDDEN - ALL EXTERNAL DOMAINS
+
+**ALL EXTERNAL DOMAINS ARE FORBIDDEN EXCEPT FREEPIK**
+
+### 🚫 FORBIDDEN - ALL EXTERNAL DOMAINS:
+
+- **ALL external CDNs** (except allowed libraries)
+- **ALL external font services** (except Google Fonts Inter)
+- **ANY external domain not explicitly allowed below**
+
+## ✅ ONLY ALLOWED DOMAINS
+
+### ALLOWED IMAGE SOURCES:
+1. **Freepik Stock Content API** - PRIMARY SOURCE
+   - https://img.freepik.com/
+   - https://api.freepik.com/
+   - Any Freepik API endpoint
+
+2. **Local Avatar Images** - ONLY for testimonials
+   - /images/avatars/Avatar_man.avif
+   - /images/avatars/Avatar_man2.avif
+   - /images/avatars/Avatar_man3.avif
+   - /images/avatars/Avatar_man4.avif
+   - /images/avatars/Avatar_man5.avif
+   - /images/avatars/Avatar_man6.avif
+   - /images/avatars/Avatar_man7.avif
+   - /images/avatars/Avatar_woman.avif
+   - /images/avatars/Avatar_woman2.avif
+   - /images/avatars/Avatar_woman3.avif
+   - /images/avatars/Avatar_woman4.avif
+   - /images/avatars/Avatar_woman5.avif
+
+### ALLOWED LIBRARY CDNs:
+1. **Tailwind CSS** - Allowed
+2. **Preline UI** - Allowed
+3. **Lucide Icons** - Allowed
+4. **Alpine.js** - Allowed
+5. **HTMx** - Allowed
+
+### ALLOWED FONT SOURCES:
+1. **Google Fonts** - ONLY Inter font family
+   - fonts.googleapis.com/css2?family=Inter
+   - fonts.gstatic.com/s/inter
+
+## 🛡️ SECURITY RULES
+
+### CRITICAL INSTRUCTIONS FOR LLM:
+1. **NEVER use ANY external domain** except Freepik
+2. **ONLY use Freepik API** for images (except avatars)
+3. **ONLY use local avatars** for testimonials
+4. **Use placeholder patterns** like "path/to/image" for automatic replacement
+5. **If unsure, use Freepik** - it's the default safe choice
+
+### IMAGE USAGE GUIDELINES:
+- **Hero sections**: Use Freepik API for background/product images
+- **Features sections**: Use Freepik API for product mockups/screenshots
+- **Testimonials sections**: Use local avatars ONLY
+- **Gallery sections**: Use Freepik API for multiple images
+- **About sections**: Use Freepik API for team/office images
+
+### AVATAR USAGE GUIDELINES:
+- **Size**: 50x50 to 150x150 pixels
+- **Usage**: ONLY for testimonials/customer reviews
+- **Source**: ONLY local /images/avatars/ folder
+- **Format**: ONLY .avif files
+- **Never use avatars** in Hero, Features, Newsletter, or other sections
+
+### AUTOMATIC REPLACEMENT PATTERNS:
+The system will automatically replace:
+- `"path/to/image"` → Freepik image URL
+- `"path/to/avatar"` → Local avatar path
+- **ANY external domain** → Freepik image URL
+
+## ⚠️ COMPLIANCE REQUIREMENTS
+
+### MANDATORY CHECKS:
+1. **Before generating**: Check if any external domains are mentioned
+2. **After generating**: Verify no external domains are in the code
+3. **If external domain detected**: Regenerate with stronger restrictions
+
+### VALIDATION STEPS:
+1. Scan generated code for any external domain patterns
+2. Replace any found external domains with Freepik alternatives
+3. Log all replacements for transparency
+4. Regenerate component if external domains persist
+
+## 📋 DOMAIN VALIDATION REGEX
+
+### FORBIDDEN DOMAIN PATTERNS:
+```regex
+https://[^"]*\.(jpg|jpeg|png|webp|gif|svg)
+```
+**EXCEPT:**
+```regex
+https://img\.freepik\.com/.*
+https://api\.freepik\.com/.*
+/images/avatars/Avatar_.*\.avif
+```
+
+### ALLOWED DOMAIN PATTERNS:
+```regex
+https://img\.freepik\.com/.*
+https://api\.freepik\.com/.*
+/images/avatars/Avatar_.*\.avif
+```
+
+## 🔒 ENFORCEMENT MECHANISM
+
+### AUTOMATIC BLOCKING:
+1. **System Prompt**: Explicitly forbids unauthorized domains
+2. **Regex Replacement**: Automatically replaces external domains
+3. **Pre-Save Validation**: Checks and regenerates if needed
+4. **Logging**: Tracks all domain-related actions
+
+### REGENERATION TRIGGERS:
+- Any external domain detected in generated code
+- Any image URL not from allowed sources
+- Any avatar usage outside of testimonials
+- Any hardcoded image paths that don't match allowed patterns
+
+## 📝 USAGE INSTRUCTIONS
+
+### FOR LLM INTEGRATION:
+This context must be:
+1. **Included in system prompts** for all Create methods
+2. **Referenced before generation** to ensure compliance
+3. **Validated after generation** to catch violations
+4. **Enforced through replacement** if violations are found
+
+### FOR DEVELOPERS:
+1. **Always include this context** when calling any LLM
+2. **Validate generated code** against external domains
+3. **Replace violations** with Freepik alternatives
+4. **Log all actions** for audit purposes
+
+## 🎯 SUCCESS CRITERIA
+
+### COMPLIANCE CHECKLIST:
+- [ ] No external domains in generated code
+- [ ] Only Freepik images used (except avatars)
+- [ ] Only local avatars used for testimonials
+- [ ] All image URLs are from allowed sources
+- [ ] No external CDNs except allowed libraries
+- [ ] No external fonts except Google Fonts (Inter)
+
+### VALIDATION OUTPUT:
+- ✅ All domains are from allowed sources
+- ✅ No external domains detected
+- ✅ Image usage follows guidelines
+- ✅ Avatar usage is correct
+- ✅ Component is ready for production
+
+## 🚨 CRITICAL REMINDER
+
+**NEVER, UNDER ANY CIRCUMSTANCES, USE EXTERNAL DOMAINS IN GENERATED CODE.**
+
+**ONLY USE FREEPIK OR LOCAL AVATARS AS SPECIFIED ABOVE.**
+
+**ANY VIOLATION WILL RESULT IN AUTOMATIC REGENERATION.**
+
+This domain security context is MANDATORY for all LLM interactions in this project. 

@@ -1,0 +1,191 @@
+# ASTRO COMPONENT GENERATION INSTRUCTIONS
+
+## 🚨 CRITICAL REQUIREMENTS - MUST FOLLOW (HIGHEST PRIORITY)
+These rules are ABSOLUTE and override all other instructions:
+
+### ❌ FORBIDDEN PATTERNS - NEVER USE
+- **NEVER create duplicate Lucide imports** - Only ONE import statement per component
+- **NEVER use malformed URLs** - Always use single quotes: `"https://..."` NOT `""https://...""`
+- **NEVER repeat the same image URL** - Each image should be unique
+- **NEVER hardcode avatar paths** - Use `{{AVATAR_IMAGE}}` placeholder
+- **NEVER hardcode Unsplash URLs** - Use `{{MOCKUP_IMAGE}}` placeholder
+
+### ✅ REQUIRED PATTERNS - ALWAYS USE
+- **ALWAYS use `{{MOCKUP_IMAGE}}` for dynamic images**
+- **ALWAYS use `{{AVATAR_IMAGE}}` for dynamic avatars**
+- **ALWAYS consolidate Lucide imports into ONE statement**
+- **ALWAYS use proper TypeScript interfaces**
+- **ALWAYS provide default values for props**
+
+## 📋 COMPONENT STRUCTURE REQUIREMENTS
+
+### Frontmatter Structure (REQUIRED)
+```astro
+---
+// ✅ CORRECT: Single consolidated import
+import { Leaf, Star, Heart, Camera, User } from '@lucide/astro';
+
+// ✅ CORRECT: TypeScript interfaces
+interface ComponentProps {
+  title: string;
+  subtitle?: string;
+  image?: string;
+  avatar?: string;
+}
+
+// ✅ CORRECT: Props with defaults and placeholders
+const {
+  title = "Default Title",
+  subtitle = "Default subtitle",
+  image = "{{MOCKUP_IMAGE}}", // Will be replaced with Unsplash image
+  avatar = "{{AVATAR_IMAGE}}" // Will be replaced with random local avatar
+} = Astro.props as Partial<ComponentProps>;
+---
+```
+
+### Gallery Component Structure (SPECIFIC)
+```astro
+---
+interface GalleryItem {
+  id: number;
+  image: string; // Use {{MOCKUP_IMAGE}} here
+  title: string;
+  description: string;
+}
+
+const items = [
+  {
+    id: 1,
+    image: "{{MOCKUP_IMAGE}}", // ✅ Will be unique
+    title: "Product 1",
+    description: "Description 1"
+  },
+  {
+    id: 2,
+    image: "{{MOCKUP_IMAGE}}", // ✅ Will be unique
+    title: "Product 2", 
+    description: "Description 2"
+  }
+];
+---
+```
+
+## 🎨 DESIGN REQUIREMENTS
+
+### Icon Integration
+- **Use Lucide Astro components ONLY** - Never create custom SVG icons
+- **Include multiple icons** for visual appeal (aim for 30% more than minimal)
+- **Use contextually relevant icons** that match component purpose
+- **Create visual hierarchy** with different icon sizes and colors
+
+### Color and Typography
+- **Use Tailwind CSS** for all styling
+- **Mobile-first responsive design** with `sm:`, `md:`, `lg:` prefixes
+- **Semantic HTML structure** with proper heading hierarchy
+- **Accessibility compliance** with ARIA labels and proper contrast
+
+## 🔧 TECHNICAL REQUIREMENTS
+
+### Astro-Specific Syntax
+- **Use `{variableName}` syntax** (not `${}`)
+- **Use `class=""` attributes** (not `className`)
+- **Use `.map()` without `key` props** (Astro doesn't need keys)
+- **Use `<slot />` for child content injection**
+
+### JavaScript Safety
+- **Always check for null/undefined** before accessing DOM elements
+- **Use optional chaining** (`?.`) for property access
+- **Convert booleans to strings** for attributes
+- **Wrap event listeners in null checks**
+
+### Error Prevention
+- **NO React syntax** (className, key props, hooks)
+- **NO template literals** (use `{variable}` not `${variable}`)
+- **NO undefined variables** (always provide defaults)
+- **NO invalid imports** (only from `@lucide/astro`)
+
+## 🎯 GENERATION PRIORITY ORDER
+1. **CRITICAL REQUIREMENTS** (must follow)
+2. **COMPONENT STRUCTURE** (proper Astro syntax)
+3. **DESIGN REQUIREMENTS** (visual appeal and accessibility)
+4. **TECHNICAL REQUIREMENTS** (safety and performance)
+5. **VALIDATION** (ensure no errors)
+
+Remember: These instructions are **HIERARCHICAL** - Critical requirements override all other considerations.
+
+## 🚫 EXAMPLES OF WHAT NOT TO DO
+
+```astro
+---
+// ❌ WRONG: Duplicate imports
+import { Leaf, Star } from '@lucide/astro';
+import { Leaf, Star, Heart } from '@lucide/astro'; // DUPLICATE!
+
+// ❌ WRONG: Malformed URLs
+image: ""https://images.unsplash.com/photo-123..."", // DOUBLE QUOTES!
+
+// ❌ WRONG: Same image repeated
+items = [
+  { image: "https://same-url.jpg" },
+  { image: "https://same-url.jpg" }, // DUPLICATE!
+]
+
+// ❌ WRONG: Hardcoded avatar paths
+avatar: "Avatar_man.avif", // WRONG PATH!
+---
+
+<!-- Template content here -->
+```
+
+## ✅ EXAMPLES OF WHAT TO DO
+
+```astro
+---
+// ✅ CORRECT: Single consolidated import
+import { Leaf, Star, Heart, Camera, User } from '@lucide/astro';
+
+// ✅ CORRECT: Proper image paths
+image = "{{MOCKUP_IMAGE}}", // Will be replaced dynamically
+avatar = "{{AVATAR_IMAGE}}", // Will be replaced dynamically
+
+// ✅ CORRECT: Unique images for galleries
+items = [
+  { image: "{{MOCKUP_IMAGE}}" }, // Each will be unique
+  { image: "{{MOCKUP_IMAGE}}" }, // Each will be unique
+]
+---
+```
+
+## 🔄 INSTRUCTION OVERRIDE SYSTEM
+
+### When Multiple Instructions Conflict:
+1. **CRITICAL REQUIREMENTS** always win
+2. **COMPONENT STRUCTURE** overrides design preferences
+3. **TECHNICAL REQUIREMENTS** override convenience
+4. **VALIDATION** catches any remaining issues
+
+### Example Conflict Resolution:
+- ❌ Design wants multiple imports for organization
+- ✅ CRITICAL REQUIREMENT: Only ONE import statement
+- **RESULT**: Use single consolidated import
+
+- ❌ Convenience wants hardcoded URLs
+- ✅ CRITICAL REQUIREMENT: Use `{{MOCKUP_IMAGE}}` placeholders
+- **RESULT**: Use placeholders, framework handles replacement
+
+## 📋 VALIDATION CHECKLIST
+Before generating any component, ensure:
+
+- [ ] Single Lucide import statement
+- [ ] Uses `{{MOCKUP_IMAGE}}` placeholders for images
+- [ ] Uses `{{AVATAR_IMAGE}}` placeholders for avatars
+- [ ] No malformed URLs with double quotes
+- [ ] No duplicate image URLs in galleries
+- [ ] Proper TypeScript interfaces
+- [ ] Default values for all props
+- [ ] Multiple contextually relevant icons
+- [ ] Responsive design with Tailwind
+- [ ] Semantic HTML structure
+- [ ] Accessibility attributes
+- [ ] Safe DOM element access
+- [ ] No lint errors 

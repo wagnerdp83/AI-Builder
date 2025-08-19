@@ -1,0 +1,80 @@
+# Dependencies
+node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Next.js binary files
+**/@next/swc-*/
+**/next-swc.*.node
+
+# Build output
+.next/
+out/
+build/
+dist/
+**/dist/
+
+# Cache
+.cache/
+.eslintcache
+.npm
+.yarn-cache
+
+# Environment
+.env*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build artifacts
+*.tsbuildinfo
+next-env.d.ts
+
+# Large binary files
+*.node
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Next.js specific (interface directory)
+interface/.next/
+interface/out/
+interface/build/
+interface/dist/
+interface/*.tsbuildinfo
+interface/next-env.d.ts
+
+# Astro specific (rendering directory)
+rendering/dist/
+rendering/.astro/
+rendering/build/
+rendering/*.tsbuildinfo
+
+# Development and temporary files
+.cursor/
+interface_current/
+templates/
+test-output/
+scripts/output-clean/
+
+# Logs and reports
+*.log
+*.md
+!README.md
+!CURSOR_DEVELOPMENT_RULES.md

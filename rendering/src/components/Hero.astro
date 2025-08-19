@@ -1,0 +1,79 @@
+---
+import { MapPin, Star } from '@lucide/astro';
+
+const heroContent = {
+  headline: "Find Your Dream Home Today",
+  subheadline: "From luxury apartments to family houses — we’ve got it all.",
+  primaryCta: "Search Properties",
+  secondaryCta: "Contact an Agent",
+  featuredListings: [
+    {
+      image: "https://images.unsplash.com/photo-1666066017054-17f7c505c556?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NjU0MzV8MHwxfHNlYXJjaHwzfHxtb2Rlcm4lMkMlMjBsYW5kaW5nJTIwcGFnZSUyMGhlcm98ZW58MHwwfHx8MTc1NTU0ODMzMnww&ixlib=rb-4.1.0&q=80&w=1080",
+      price: "$1,250,000",
+      location: "New York, NY"
+    },
+    {
+      image: "https://images.unsplash.com/photo-1666066017054-17f7c505c556?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NjU0MzV8MHwxfHNlYXJjaHwzfHxtb2Rlcm4lMkMlMjBsYW5kaW5nJTIwcGFnZSUyMGhlcm98ZW58MHwwfHx8MTc1NTU0ODMzMnww&ixlib=rb-4.1.0&q=80&w=1080",
+      price: "$850,000",
+      location: "Los Angeles, CA"
+    },
+    {
+      image: "https://images.unsplash.com/photo-1666066017054-17f7c505c556?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NjU0MzV8MHwxfHNlYXJjaHwzfHxtb2Rlcm4lMkMlMjBsYW5kaW5nJTIwcGFnZSUyMGhlcm98ZW58MHwwfHx8MTc1NTU0ODMzMnww&ixlib=rb-4.1.0&q=80&w=1080",
+      price: "$650,000",
+      location: "Chicago, IL"
+    },
+    {
+      image: "https://images.unsplash.com/photo-1666066017054-17f7c505c556?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NjU0MzV8MHwxfHNlYXJjaHwzfHxtb2Rlcm4lMkMlMjBsYW5kaW5nJTIwcGFnZSUyMGhlcm98ZW58MHwwfHx8MTc1NTU0ODMzMnww&ixlib=rb-4.1.0&q=80&w=1080",
+      price: "$950,000",
+      location: "Miami, FL"
+    }
+  ]
+};
+---
+
+<section class="relative w-full h-screen overflow-hidden bg-gray-100">
+  <!-- Background Video -->
+  <video
+    autoplay
+    loop
+    muted
+    playsinline
+    class="absolute top-0 left-0 w-full h-full object-cover"
+  >
+    <source src = "https://videos.pexels.com/video-files/3773486/3773486-hd_1280_720_60fps.mp4" type="video/mp4" />
+    Your browser does not support the video tag.
+  </video>
+
+  <!-- Overlay -->
+  <div class="absolute inset-0 bg-black bg-opacity-50"></div>
+
+  <!-- Content -->
+  <div class="relative z-10 flex flex-col items-center justify-center h-full px-4 text-center text-white">
+    <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold mb-4">{heroContent.headline}</h1>
+    <p class="text-xl md:text-2xl mb-8 max-w-2xl">{heroContent.subheadline}</p>
+
+    <div class="flex flex-wrap justify-center gap-4 mb-12">
+      <a href="#" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition duration-300">
+        {heroContent.primaryCta}
+      </a>
+      <a href="#" class="bg-transparent border-2 border-white hover:bg-white hover:text-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition duration-300">
+        {heroContent.secondaryCta}
+      </a>
+    </div>
+
+    <!-- Mini Image Gallery -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+      {heroContent.featuredListings.map((listing, index) => (
+        <div  class="bg-white rounded-lg overflow-hidden shadow-lg">
+          <img src={listing.image} alt={`Featured property in ${listing.location}`} class="w-full h-32 object-cover" />
+          <div class="p-3">
+            <p class="font-bold text-blue-600">{listing.price}</p>
+            <p class="text-sm text-gray-600 flex items-center">
+              <MapPin class="w-4 h-4 mr-1" /> {listing.location}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

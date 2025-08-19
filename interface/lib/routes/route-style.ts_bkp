@@ -1,0 +1,217 @@
+import { processStyleUpdate } from '@/lib/styles/style-service';
+
+export interface StyleUpdateRequest {
+  prompt: string;
+  component?: string;
+  styleType: 'color' | 'spacing' | 'size' | 'border' | 'background';
+  from?: string;
+  to: string;
+  property: string;
+}
+
+export interface StyleUpdateResponse {
+  success: boolean;
+  updates: Array<{
+    file: string;
+    type: string;
+    status: string;
+  }>;
+  dependencies: string[];
+  references: Array<{
+    value: string;
+    context: string;
+    source: any;
+  }>;
+  error?: string;
+}
+
+/**
+ * Handles Tailwind CSS style updates (colors, spacing, sizing, etc.)
+ */
+export async function handleTailwindUpdate(
+  prompt: string,
+  component?: string,
+  filename?: string
+): Promise<StyleUpdateResponse> {
+  console.log('\n=== Style Update ===');
+  console.log('Prompt:', prompt);
+  console.log('Component:', component);
+
+  try {
+    // Parse style update request
+    const styleRequest = parseStyleRequest(prompt, component);
+    console.log('Style request:', styleRequest);
+
+    // Process the style update
+    const result = await processStyleUpdate({
+      type: styleRequest.styleType as any,
+      from: styleRequest.from || '#383877',
+      to: styleRequest.to,
+      reference: styleRequest.component || '*'
+    });
+
+    console.log('Style update successful');
+    console.log('=== End Style Update ===\n');
+
+    return {
+      success: true,
+      updates: result.updates || [],
+      dependencies: result.dependencies || [],
+      references: result.references || []
+    };
+
+  } catch (error) {
+    console.error('Style update error:', error);
+    return {
+      success: false,
+      updates: [],
+      dependencies: [],
+      references: [],
+      error: error instanceof Error ? error.message : 'Unknown style update error'
+    };
+  }
+}
+
+/**
+ * Parses a style update request from natural language
+ */
+function parseStyleRequest(prompt: string, component?: string): StyleUpdateRequest {
+  let parsedComponent = component;
+  let instruction = prompt;
+
+  // Extract component if specified in format "component: instruction"
+  const componentMatch = prompt.match(/^(\w+):\s*(.+)$/);
+  if (componentMatch && !component) {
+    parsedComponent = componentMatch[1];
+    instruction = componentMatch[2];
+  }
+
+  // Determine style type and target value
+  const styleType = detectStyleType(instruction);
+  const targetValue = extractTargetValue(instruction);
+  const property = extractProperty(instruction);
+
+  if (!targetValue) {
+    throw new Error('Could not extract target value from style instruction');
+  }
+
+  return {
+    prompt,
+    component: parsedComponent,
+    styleType,
+    to: targetValue,
+    property: property || 'color'
+  };
+}
+
+/**
+ * Detects the type of style update being requested
+ */
+function detectStyleType(instruction: string): 'color' | 'spacing' | 'size' | 'border' | 'background' {
+  if (/color|colour/i.test(instruction)) return 'color';
+  if (/background|bg-/i.test(instruction)) return 'background';
+  if (/border/i.test(instruction)) return 'border';
+  if (/padding|margin|spacing|gap/i.test(instruction)) return 'spacing';
+  if (/size|width|height|text-/i.test(instruction)) return 'size';
+  
+  // Default to color for style changes
+  return 'color';
+}
+
+/**
+ * Extracts the target value from the instruction
+ */
+function extractTargetValue(instruction: string): string | null {
+  // Match patterns like "to blue", "to #ff0000", "to red-500"
+  const patterns = [
+    /(?:to|from)\s+([#]?[\w-]+)/i,
+    /(?:change|set|update).*?([#]?[\w-]+)$/i,
+    /([#]?[\w-]+)\s*(?:color|colour)/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = instruction.match(pattern);
+    if (match) {
+      return match[1];
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extracts the CSS property being modified
+ */
+function extractProperty(instruction: string): string {
+  if (/background|bg-/i.test(instruction)) return 'background';
+  if (/text.*color|color.*text/i.test(instruction)) return 'text-color';
+  if (/border.*color/i.test(instruction)) return 'border-color';
+  if (/padding/i.test(instruction)) return 'padding';
+  if (/margin/i.test(instruction)) return 'margin';
+  
+  return 'color';
+}
+
+/**
+ * Validates if a prompt is a style update request
+ */
+export function isTailwindUpdate(prompt: string): boolean {
+  const stylePatterns = [
+    /(?:change|update|set).*?(?:color|colour)/i,
+    /(?:change|update|set).*?background/i,
+    /(?:change|update|set).*?border/i,
+    /(?:change|update|set).*?padding/i,
+    /(?:change|update|set).*?margin/i,
+    /(?:change|update|set).*?size/i,
+    /(?:change|update|set).*?width/i,
+    /(?:change|update|set).*?height/i,
+    /bg-\[?#?\w+\]?/i,
+    /text-\[?#?\w+\]?/i,
+    /border-\[?#?\w+\]?/i,
+    /\w+:\s*(?:change|update|set).*?(?:color|background|border|style)/i
+  ];
+
+  return stylePatterns.some(pattern => pattern.test(prompt));
+}
+
+/**
+ * Handles global style updates across all components
+ */
+export async function handleGlobalStyleUpdate(
+  prompt: string,
+  styleType: 'color' | 'spacing' | 'size' | 'border' | 'background',
+  targetValue: string
+): Promise<StyleUpdateResponse> {
+  console.log('\n=== Global Style Update ===');
+  console.log('Style type:', styleType);
+  console.log('Target value:', targetValue);
+
+  try {
+    const result = await processStyleUpdate({
+      type: styleType as any,
+      from: '#383877', // Default current color
+      to: targetValue,
+      reference: '*' // Apply to all components
+    });
+
+    console.log('Global style update successful');
+    console.log('=== End Global Style Update ===\n');
+
+    return {
+      success: true,
+      updates: result.updates || [],
+      dependencies: result.dependencies || [],
+      references: result.references || []
+    };
+
+  } catch (error) {
+    console.error('Global style update error:', error);
+    return {
+      success: false,
+      updates: [],
+      dependencies: [],
+      references: [],
+      error: error instanceof Error ? error.message : 'Unknown global style update error'
+    };
+  }
+} 

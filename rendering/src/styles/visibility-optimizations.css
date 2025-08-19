@@ -1,0 +1,143 @@
+/* 
+  Visibility optimizations
+  These classes improve performance by telling the browser it can 
+  skip rendering work for off-screen content until needed.
+*/
+
+/* Apply to non-Hero sections */
+.content-visibility-auto {
+  content-visibility: auto;
+  /* Reserve space to minimize layout shifts */
+  contain-intrinsic-size: 0 500px;
+}
+
+/* Skip animations when reduced motion is enabled */
+@media (prefers-reduced-motion: reduce) {
+  .animation-sliding-img-up-1,
+  .animation-sliding-img-down-1 {
+    animation: none !important;
+  }
+}
+
+/* Optimize image rendering */
+img.optimize-rendering {
+  will-change: transform;
+  transform: translateZ(0);
+  /* Prevent layout shifts */
+  aspect-ratio: attr(width) / attr(height);
+}
+
+/* Apply to images that should be prioritized */
+img.above-fold {
+  loading: eager;
+  fetchpriority: high;
+  /* Prevent layout shifts */
+  aspect-ratio: attr(width) / attr(height);
+}
+
+/* Apply to images that can be loaded lazily */
+img.below-fold {
+  loading: lazy;
+  fetchpriority: low;
+  /* Prevent layout shifts */
+  aspect-ratio: attr(width) / attr(height);
+}
+
+/* Reserve space for images before they load */
+.image-container {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 75%; /* 4:3 aspect ratio */
+  background-color: #f3f4f6; /* Light gray placeholder */
+  overflow: hidden;
+  border-radius: 0.5rem;
+}
+
+.image-container img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0.5rem;
+}
+
+/* Optimize animations for performance */
+@media (prefers-reduced-motion: no-preference) {
+  .animation-sliding-img-up-1,
+  .animation-sliding-img-down-1 {
+    will-change: transform;
+    transform: translateZ(0);
+  }
+}
+
+/* Edge-specific fixes */
+@supports (-ms-ime-align: auto) {
+  .image-container {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+
+  .image-container img {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+
+  .animation-sliding-img-up-1,
+  .animation-sliding-img-down-1 {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+}
+
+/* Fix for the hero section */
+.hero-section {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Fix for the grid layout */
+.grid-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  width: 100%;
+}
+
+/* Fix for the container */
+.container {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* Fix for the header */
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background-color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* Fix for the footer */
+.footer {
+  margin-top: auto;
+  background-color: #111827;
+  color: #fff;
+  padding: 2rem 0;
+}
+
+/* Fix for the main content */
+.main-content {
+  flex: 1;
+  padding-top: 4rem;
+}

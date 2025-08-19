@@ -1,0 +1,9 @@
+---
+import { Star } from 'lucide-astro';
+
+const { title = "Test" } = Astro.props;
+---
+
+<div class="invalid">
+  <h1 className={title}>{title}</h1>
+</div>

@@ -1,0 +1,1779 @@
+import { promises as fs } from 'fs';
+import path from 'path';
+import { getComponentsDir, getPagesDir, getRenderingDir } from '../utils/directory';
+import { Mistral } from '@mistralai/mistralai';
+import { exec } from 'child_process';
+import { getMockupImagePath } from './imageUtils';
+import { executeVisionCreator } from './visionCreateHandler';
+import { PromptEnhancer } from '../services/prompt-enhancer';
+import { enhancedImageService } from '../services/image-service';
+import { DomainSecurityService } from '../services/domain-security';
+
+const mistralApiKey = process.env.MISTRAL_API_KEY;
+if (!mistralApiKey) {
+  throw new Error('MISTRAL_API_KEY is not configured in the environment.');
+}
+const mistralClient = new Mistral({ apiKey: mistralApiKey });
+
+// =================================================================================
+// START: Standalone Astro Validator Service
+// =================================================================================
+const MAX_RETRIES = 2;
+
+class AstroValidator {
+  static async validateAndFix(code: string): Promise<string> {
+    const renderingDir = getRenderingDir();
+    let currentCode = code;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const { isValid, error } = await this.compileAstro(currentCode, renderingDir);
+      if (isValid) {
+        console.log('✅ Astro code validation successful.');
+        return currentCode;
+      }
+      console.warn(`️ Astro validation failed on attempt ${attempt + 1}. Error: ${error}`);
+      if (attempt < MAX_RETRIES) {
+        console.log(`Retrying with AI-powered correction...`);
+        currentCode = await this.getAiFix(currentCode, error);
+      } else {
+        console.error(`❌ AI failed to fix the Astro code after ${MAX_RETRIES} attempts.`);
+        throw new Error(`Failed to generate valid Astro code. Last error: ${error}`);
+      }
+    }
+    throw new Error('Exited validation loop unexpectedly.');
+  }
+
+  private static async compileAstro(code: string, renderingDir: string): Promise<{ isValid: boolean, error: string | null }> {
+    const tmpDir = path.join(renderingDir, 'src', 'components', '.tmp');
+    await fs.mkdir(tmpDir, { recursive: true });
+    const tmpFile = path.join(tmpDir, `validation-test-${Date.now()}.astro`);
+    try {
+      await fs.writeFile(tmpFile, code);
+      const command = `npx --no-install astro check --fail-on-warnings "${tmpFile}"`;
+      return await new Promise((resolve) => {
+        exec(command, { cwd: renderingDir }, (err, stdout, stderr) => {
+          // Only show errors related to tmpFile (suppress global Astro/TS errors)
+          const allOutput = (stderr || stdout) || '';
+          const filtered = allOutput
+            .split('\n')
+            .filter(line => line.includes(path.basename(tmpFile)))
+            .join('\n');
+          if (err || filtered) {
+            if (!filtered && (stderr || stdout)) {
+              // Fallback: if filtered is empty but there is an error, use the full error output
+              console.warn('[AstroValidator] Filtered error is empty, falling back to full error output:');
+              console.warn(allOutput);
+              resolve({ isValid: false, error: allOutput });
+            } else {
+              resolve({ isValid: false, error: filtered });
+            }
+          } else {
+            resolve({ isValid: true, error: null });
+          }
+        });
+      });
+    } finally {
+      await fs.unlink(tmpFile).catch(() => console.error(`Failed to delete temp file: ${tmpFile}`));
+    }
+  }
+
+  private static async getAiFix(code: string, error: string | null): Promise<string> {
+    const systemPrompt = `You are an expert Astro developer and problem-solver. You will be given a piece of Astro code that has a compilation error. Your job is to analyze the error, understand the original developer's intent, and fix the code to be both syntactically correct and functionally complete.
+
+**CRITICAL INSTRUCTIONS:**
+1.  **Analyze the Error:** The provided error message will tell you what's wrong (e.g., a component is not exported, a variable is undefined).
+2.  **Deduce the Intent:** Look at the broken code. If an icon like \`Google\` is being imported from \`@lucide/astro\` and fails, the developer likely wanted a Google icon. Do not just delete the broken code.
+3.  **Find a Solution:** If an import is wrong, find the correct one. For example, the \`lucide\` library often uses brand names directly (e.g., \`Youtube\`, \`Twitter\`). You may need to search for the correct icon name if the provided one is wrong. If an icon truly doesn't exist in \`@lucide/astro\`, you can substitute it with a similar, existing icon (e.g., use a generic \`Mail\` icon if a specific email provider icon is missing).
+4.  **Preserve Functionality:** Your primary goal is to make the component work as intended. Deleting features to fix a compilation error is a last resort.
+5.  **Respond with Code Only:** Your response MUST be ONLY the corrected, complete Astro code. Do not add any explanations or markdown.`;
+    const userMessage = `The following Astro code produced an error. Please fix it.\n\nError Message:\n---\n${error}\n---\n\nBroken Code:\n---\n${code}\n---`;
+    const response = await mistralClient.chat.complete({
+        model: 'codestral-latest',
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userMessage }],
+        temperature: 0.1,
+    });
+    const fixedCode = response.choices[0].message.content;
+    if (!fixedCode || typeof fixedCode !== 'string') {
+        throw new Error('AI failed to return valid string code for the fix.');
+    }
+    return fixedCode.replace(/```(astro)?/g, '').trim();
+  }
+}
+// =================================================================================
+// END: Standalone Astro Validator Service
+// =================================================================================
+
+// === AbstractAstroValidator: Dedicated validator for abstract pipeline ===
+// import path from 'path'; // Duplicate, already imported above
+// import { promises as fs } from 'fs'; // Duplicate, already imported above
+// import { exec } from 'child_process'; // Duplicate, already imported above
+// import { Mistral } from '@mistralai/mistralai'; // Duplicate, already imported above
+// const mistralApiKey = process.env.MISTRAL_API_KEY; // Duplicate, already declared above
+// const mistralClient = new Mistral({ apiKey: mistralApiKey }); // Duplicate, already declared above
+// const MAX_RETRIES = 2; // Duplicate, already declared above
+
+export class AbstractAstroValidator {
+  static async validateAndFix(code: string, renderingDir: string): Promise<string> {
+    let currentCode = code;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const { isValid, error } = await this.compileAstro(currentCode, renderingDir);
+      if (isValid) {
+        console.log('[AbstractAstroValidator] ✅ Astro code validation successful.');
+        return currentCode;
+      }
+      console.warn(`[AbstractAstroValidator] ⚠️ Astro validation failed on attempt ${attempt + 1}. Error: ${error}`);
+      if (attempt < MAX_RETRIES) {
+        console.log('[AbstractAstroValidator] Retrying with AI-powered correction...');
+        currentCode = await this.getAiFix(currentCode, error);
+      } else {
+        console.error('[AbstractAstroValidator] ❌ AI failed to fix the Astro code after max attempts.');
+        throw new Error(`Failed to generate valid Astro code. Last error: ${error}`);
+      }
+    }
+    throw new Error('[AbstractAstroValidator] Exited validation loop unexpectedly.');
+  }
+  private static async compileAstro(code: string, renderingDir: string): Promise<{ isValid: boolean, error: string | null }> {
+    const tmpDir = path.join(renderingDir, 'src', 'components', '.tmp');
+    await fs.mkdir(tmpDir, { recursive: true });
+    const tmpFile = path.join(tmpDir, `abstract-validation-test-${Date.now()}.astro`);
+    try {
+      await fs.writeFile(tmpFile, code);
+      const command = `npx --no-install astro check --fail-on-warnings "${tmpFile}"`;
+      return await new Promise((resolve) => {
+        exec(command, { cwd: renderingDir }, (err, stdout, stderr) => {
+          const allOutput = (stderr || stdout) || '';
+          if (err || allOutput) {
+            resolve({ isValid: false, error: allOutput });
+          } else {
+            resolve({ isValid: true, error: null });
+          }
+        });
+      });
+    } finally {
+      await fs.unlink(tmpFile).catch(() => console.error(`[AbstractAstroValidator] Failed to delete temp file: ${tmpFile}`));
+    }
+  }
+  private static async getAiFix(code: string, error: string | null): Promise<string> {
+    const systemPrompt = `You are an expert Astro developer. You will be given a piece of Astro code that has an error, along with the error message from the compiler. Your ONLY job is to fix the code to resolve the error. Respond with ONLY the corrected, complete Astro code. Do not add any explanations, markdown, or apologies.`;
+    const userMessage = `The following Astro code produced an error. Please fix it.\n\nError Message:\n---\n${error}\n---\n\nBroken Code:\n---\n${code}\n---`;
+    const response = await mistralClient.chat.complete({
+      model: 'codestral-latest',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage }
+      ],
+      temperature: 0.1,
+    });
+    const fixedCode = response.choices[0].message.content;
+    if (!fixedCode) {
+      throw new Error('[AbstractAstroValidator] AI failed to return any code for the fix.');
+    }
+    // Fix for linter: only call .replace on string
+    if (typeof fixedCode === 'string') {
+      return fixedCode.replace(/```(astro)?/g, '').trim();
+    }
+    // If not a string, return as is or throw
+    // return fixedCode;
+    throw new Error('AI failed to return valid string code for the fix.');
+  }
+}
+
+// === GenericAstroValidator: Dedicated validator for generic pipeline ===
+// import path from 'path'; // Duplicate, already imported above
+// import { promises as fs } from 'fs'; // Duplicate, already imported above
+// import { exec } from 'child_process'; // Duplicate, already imported above
+// import { Mistral } from '@mistralai/mistralai'; // Duplicate, already declared above
+// const mistralApiKey = process.env.MISTRAL_API_KEY; // Duplicate, already declared above
+// const mistralClient = new Mistral({ apiKey: mistralApiKey }); // Duplicate, already declared above
+// const MAX_RETRIES = 2; // Duplicate, already declared above
+
+// === GENERIC PIPELINE DEDICATED CONSTANTS ===
+const GENERIC_MAX_RETRIES = 2; // Keep this one active
+
+const GENERIC_CODEGEN_SYSTEM_PROMPT = `You are a world-class AI developer specializing in creating production-ready Astro components using Tailwind CSS and Preline UI. Your code should be clean, semantic, and follow best practices.
+
+🚫 **CRITICAL: ATOMIC COMPONENTS ONLY**
+- **ONE SECTION PER COMPONENT:** Each component MUST contain ONLY its designated section
+- **NO FULL PAGES:** NEVER create complete landing pages with multiple sections
+- **NO HTML/HEAD/BODY:** NEVER include <!DOCTYPE html>, <html>, <head>, or <body> tags
+- **NO MULTIPLE SECTIONS:** If creating "Menu", ONLY include navigation/menu. If creating "Hero", ONLY include hero section
+- **NO OTHER SECTIONS:** Do NOT include partners, benefits, features, testimonials, FAQ, or any other sections in a single component
+
+**EXAMPLES OF CORRECT ATOMIC COMPONENTS:**
+
+✅ CORRECT Menu.astro (ONLY navigation):
+---
+const navItems = [
+  { text: "Home", href: "#home" },
+  { text: "Features", href: "#features" },
+  { text: "Pricing", href: "#pricing" }
+];
+---
+<header class="flex flex-wrap sm:justify-start sm:flex-nowrap z-50 w-full bg-white text-sm py-3 sm:py-0">
+  <nav class="relative max-w-7xl w-full mx-auto px-4 sm:flex sm:items-center sm:justify-between sm:px-6 lg:px-8" aria-label="Global">
+    <!-- ONLY navigation content -->
+  </nav>
+</header>
+
+✅ CORRECT Hero.astro (ONLY hero section):
+---
+const heroTitle = "Find Your Dream Home";
+const heroSubtitle = "Discover the perfect property with our expert guidance.";
+---
+<section class="bg-gray-100 py-20">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+    <h1 class="text-4xl font-bold text-gray-900">{heroTitle}</h1>
+    <p class="mt-4 text-lg text-gray-600">{heroSubtitle}</p>
+    <!-- ONLY hero content -->
+  </div>
+</section>
+
+❌ WRONG (NEVER DO THIS):
+- Creating a Hero component with partners, benefits, features, testimonials, FAQ sections
+- Creating a Menu component with hero, features, or any other sections
+- Creating any component with multiple sections
+
+**ICON REQUIREMENTS (CRITICAL):**
+- **ALWAYS use Lucide icons** from @lucide/astro library
+- **NEVER use image files for icons** (no .svg, .png, .jpg files for icons)
+- **Import Lucide icons** at the top of the component: import { Search, Camera, User, Lock, BarChart, Mail, Phone, MapPin } from '@lucide/astro';
+- **Use Lucide components directly** in JSX: <Search class="w-6 h-6" />
+- **Icon names should match Lucide icon names** (e.g., "Search", "Camera", "User", "Lock", "BarChart")
+
+**CORRECT ICON USAGE EXAMPLE:**
+---
+import { Search, Camera, User, Lock, BarChart } from '@lucide/astro';
+
+const features = [
+  {
+    title: "Advanced Search",
+    description: "Find what you need quickly",
+    icon: Search
+  }
+];
+---
+<div>
+  <feature.icon class="w-6 h-6 text-blue-600" />
+</div>
+
+**❌ WRONG ICON USAGE (NEVER DO THIS):**
+- <img src="/images/icons/Search.svg" />  ← WRONG!
+- <img src="/images/icons/feature.icon.svg" />  ← WRONG!
+- Using any image file for icons ← WRONG!
+
+**AVATAR vs IMAGE GUIDELINES:**
+- **AVATARS (50x50 to 150x150):** Use ONLY for testimonials/customer reviews. Use these exact filenames: Avatar_man.avif, Avatar_man2.avif, Avatar_man3.avif, Avatar_man4.avif, Avatar_man6.avif, Avatar_man7.avif, Avatar_woman.avif, Avatar_woman2.avif, Avatar_woman3.avif, Avatar_woman4.avif, Avatar_woman5.avif
+- **IMAGES (larger sizes):** Use ONLY Freepik API for all other images. NEVER use external domains
+- **SIGNUP SECTIONS:** Use Freepik images, NOT avatars
+
+🚫 **ABSOLUTELY FORBIDDEN DOMAINS (NEVER USE THESE):**
+- img.b2bpic.net
+- images.unsplash.com
+- picsum.photos
+- Any other external domain except Freepik
+
+✅ **ONLY ALLOWED IMAGE SOURCES:**
+- Freepik Stock Content API
+- Local avatars: /images/avatars/*.avif
+
+⚠️ **CRITICAL:** If you use ANY forbidden domain, the component will be rejected and regenerated. ONLY use Freepik or local avatars.
+
+**CRITICAL DIRECTIVES:**
+1.  **ATOMIC COMPONENTS (STRICT):**
+    *   **ONE SECTION ONLY:** Each component MUST contain ONLY its designated section. If creating a "Menu" component, it should contain ONLY the navigation/menu section. If creating a "Hero" component, it should contain ONLY the hero section. NEVER include multiple sections in a single component.
+    *   **NO FULL PAGES:** Do NOT create complete landing pages with multiple sections. Each component is a building block that will be assembled into a complete page later.
+    *   **NO HTML/HEAD/BODY:** Do NOT include <!DOCTYPE html>, <html>, <head>, or <body> tags. These are page-level elements, not component-level elements.
+
+2.  **TECH STACK:**
+    *   **Astro:** Generate a valid, single-file Astro component (.astro).
+    *   **Tailwind CSS:** All styling MUST be done with Tailwind CSS utility classes.
+    *   **Preline UI:** You MUST use Preline UI components (see https://preline.co/ for components like headers, dropdowns, cards, etc.) to create modern, professional-looking layouts. This is a strict requirement for design consistency.
+
+3.  **IMAGES AND VISUAL CONTENT (CRITICAL):**
+    *   **ALWAYS INCLUDE IMAGES:** Every component MUST include relevant images, icons, and visual elements. This is NOT optional.
+    *   **Image Sources:** Use high-quality images from Freepik Stock Content API:
+      - The system will automatically fetch images from Freepik API based on component type
+      - For avatars, use local images from \`/images/avatars/\` folder
+      - Use Lucide React icons for icons (import from \`@lucide/astro\`)
+      - Font Awesome icons when needed
+      - **IMPORTANT:** Use placeholder patterns like \`"path/to/image"\` for images - the system will automatically replace these with actual Freepik URLs
+    *   **Image Types by Component:**
+      - **Hero:** Background images, product images, lifestyle photos from Freepik
+      - **Features:** Icons, product mockups, screenshots from Freepik
+      - **Testimonials:** Avatar images, customer photos from Freepik
+      - **Products:** Product images, mockups, lifestyle shots from Freepik
+      - **Gallery:** Multiple high-quality images from Freepik
+      - **About:** Team photos, office images, process diagrams from Freepik
+    *   **Image Optimization:** Always include \`alt\` attributes and responsive sizing
+    *   **Visual Hierarchy:** Use images to create visual interest and guide user attention
+
+4.  **CODE QUALITY:**
+    *   **Correct Tag Usage:** You MUST use the correct, top-level semantic HTML tag. For example, a component named \`Footer\` MUST use a \`<footer>\` tag, not \`<header>\`. A component named \`Testimonial\` or \`Hero\` should use a \`<section>\` tag.
+    *   **Semantic HTML:** Use appropriate HTML5 tags like \`<header>\`, \`<nav>\`, \`<section>\`, \`<figure>\`, etc. For a navigation bar, use \`<header>\` and \`<nav>\`.
+    *   **Data Separation (Strict):** You MUST separate content from presentation. ALL text content (headings, paragraphs, button text, labels, etc.), link URLs, and lists of items MUST be defined as constants in the \`---\` frontmatter. The HTML body must then reference these variables. **There are no exceptions to this rule; do not hardcode ANY text directly in the HTML body.**
+    *   **Dynamic & Reusable:** Avoid hardcoding content. For navigation links, generate anchor links (e.g., \`href="#faq"\`) based on the item name. For logos or brand names, use a generic placeholder like "Logo" or "Brand Name" that is easy for the user to replace.
+    *   **Production-Ready:** The generated component must be complete and ready to use. No "Lorem Ipsum" or unfinished parts.
+
+5.  **NAVIGATION COMPONENTS:**
+    *   **Structure:** Navigation items MUST be defined as an array in the frontmatter with all properties (text, href, submenu items).
+    *   **Layout:** Follow the user's layout instructions exactly (e.g., "logo on left, items on right").
+    *   **Submenus:** If a menu item has submenus, use Preline's dropdown component (\`hs-dropdown\`) and nest the submenu items properly.
+    *   **Mobile:** Always include a mobile-responsive hamburger menu using Preline's collapse component.
+
+6.  **COMPONENT STRUCTURE:**
+    *   Only include a \`---\` frontmatter section if you need to define props or import something. Keep it minimal. Most components should not need it.
+
+7.  **RESPONSE FORMAT:**
+    *   Your response MUST be ONLY the raw Astro code. No explanations, no markdown, no apologies. Just the code.
+
+**EXAMPLE OF A GOOD ATOMIC MENU COMPONENT:**
+\`\`\`astro
+---
+const navItems = [
+  { text: "Home", href: "#home" },
+  { text: "Features", href: "#features", submenu: [
+    { text: "Core Features", href: "#core-features" },
+    { text: "Advanced", href: "#advanced" }
+  ]},
+  { text: "Pricing", href: "#pricing" }
+];
+
+const brandName = "Your Brand";
+---
+<header class="flex flex-wrap sm:justify-start sm:flex-nowrap z-50 w-full bg-white text-sm py-3 sm:py-0">
+  <nav class="relative max-w-7xl w-full mx-auto px-4 sm:flex sm:items-center sm:justify-between sm:px-6 lg:px-8" aria-label="Global">
+    <div class="flex items-center justify-between">
+      <a class="flex-none text-xl font-semibold" href="#" aria-label="Brand">{brandName}</a>
+      <div class="sm:hidden">
+        <button type="button" class="hs-collapse-toggle p-2 inline-flex justify-center items-center gap-2 rounded-lg border font-medium bg-white text-gray-700 shadow-sm align-middle hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white focus:ring-blue-600 transition-all text-sm" data-hs-collapse="#navbar-collapse-with-animation" aria-controls="navbar-collapse-with-animation" aria-label="Toggle navigation">
+          <svg class="hs-collapse-open:hidden flex-shrink-0 size-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/></svg>
+          <svg class="hs-collapse-open:block hidden flex-shrink-0 size-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="navbar-collapse-with-animation" class="hs-collapse hidden overflow-hidden transition-all duration-300 basis-full grow sm:block">
+      <div class="flex flex-col gap-y-4 gap-x-0 mt-5 sm:flex-row sm:items-center sm:justify-end sm:gap-y-0 sm:gap-x-7 sm:mt-0 sm:ps-7">
+        {navItems.map(item => (
+          <div class="hs-dropdown relative inline-flex">
+            <a class="font-medium text-gray-500 hover:text-gray-400 sm:py-6" href={item.href}>{item.text}</a>
+            {item.submenu && (
+              <div class="hs-dropdown-menu transition-[opacity,margin] duration hs-dropdown-open:opacity-100 opacity-0 hidden min-w-60 bg-white shadow-md rounded-lg p-2 mt-2" aria-labelledby="hs-dropdown-basic">
+                {item.submenu.map(subItem => (
+                  <a class="flex items-center gap-x-3.5 py-2 px-3 rounded-lg text-sm text-gray-800 hover:bg-gray-100 focus:ring-2 focus:ring-blue-500" href={subItem.href}>{subItem.text}</a>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  </nav>
+</header>
+\`\`\`
+
+**EXAMPLE OF A GOOD ATOMIC HERO COMPONENT:**
+\`\`\`astro
+---
+const heroTitle = "Find Your Dream Home";
+const heroSubtitle = "Discover the perfect property with our expert guidance.";
+const heroButtonText = "Get Started";
+---
+<section class="bg-gray-100 py-20">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+    <h1 class="text-4xl font-bold text-gray-900">{heroTitle}</h1>
+    <p class="mt-4 text-lg text-gray-600">{heroSubtitle}</p>
+    <a href="#features" class="mt-8 inline-block bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-700">{heroButtonText}</a>
+  </div>
+</section>
+\`\`\`
+`;
+
+export class GenericAstroValidator {
+  static async validateAndFix(code: string, renderingDir: string): Promise<string> {
+    let currentCode = code;
+    for (let attempt = 0; attempt <= GENERIC_MAX_RETRIES; attempt++) {
+      const { isValid, error } = await this.compileAstro(currentCode, renderingDir);
+      if (isValid) {
+        console.log('[GenericAstroValidator] ✅ Astro code validation successful.');
+        return currentCode;
+      }
+      console.warn(`[GenericAstroValidator] ⚠️ Astro validation failed on attempt ${attempt + 1}. Error: ${error}`);
+      if (attempt < GENERIC_MAX_RETRIES) {
+        console.log('[GenericAstroValidator] Retrying with AI-powered correction...');
+        currentCode = await this.getAiFix(currentCode, error);
+      } else {
+        console.error('[GenericAstroValidator] ❌ AI failed to fix the Astro code after max attempts.');
+        throw new Error(`Failed to generate valid Astro code. Last error: ${error}`);
+      }
+    }
+    throw new Error('[GenericAstroValidator] Exited validation loop unexpectedly.');
+  }
+  private static async compileAstro(code: string, renderingDir: string): Promise<{ isValid: boolean, error: string | null }> {
+    const tmpDir = path.join(renderingDir, 'src', 'components', '.tmp');
+    await fs.mkdir(tmpDir, { recursive: true });
+    const tmpFile = path.join(tmpDir, `generic-validation-test-${Date.now()}.astro`);
+    try {
+      await fs.writeFile(tmpFile, code);
+      const command = `npx --no-install astro check --fail-on-warnings "${tmpFile}"`;
+      return await new Promise((resolve) => {
+        exec(command, { cwd: renderingDir }, (err, stdout, stderr) => {
+          const allOutput = (stderr || stdout) || '';
+          if (err || allOutput) {
+            resolve({ isValid: false, error: allOutput });
+          } else {
+            resolve({ isValid: true, error: null });
+          }
+        });
+      });
+    } finally {
+      await fs.unlink(tmpFile).catch(() => console.error(`[GenericAstroValidator] Failed to delete temp file: ${tmpFile}`));
+    }
+  }
+  private static async getAiFix(code: string, error: string | null): Promise<string> {
+    const systemPrompt = `You are an expert Astro developer. You will be given a piece of Astro code that has an error, along with the error message from the compiler. Your ONLY job is to fix the code to resolve the error. Respond with ONLY the corrected, complete Astro code. Do not add any explanations, markdown, or apologies.`;
+    const userMessage = `The following Astro code produced an error. Please fix it.\n\nError Message:\n---\n${error}\n---\n\nBroken Code:\n---\n${code}\n---`;
+    const response = await mistralClient.chat.complete({
+      model: 'codestral-latest',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage }
+      ],
+      temperature: 0.1,
+    });
+    const fixedCode = response.choices[0].message.content;
+    if (!fixedCode) {
+      throw new Error('[GenericAstroValidator] AI failed to return any code for the fix.');
+    }
+    // Fix for linter: only call .replace on string
+    if (typeof fixedCode === 'string') {
+      return fixedCode.replace(/```(astro)?/g, '').trim();
+    }
+    // If not a string, return as is or throw
+    // return fixedCode;
+    throw new Error('AI failed to return valid string code for the fix.');
+  }
+}
+
+// === SingleAstroValidator: Dedicated validator for single pipeline ===
+// import path from 'path'; // Duplicate, already imported above
+// import { promises as fs } from 'fs'; // Duplicate, already imported above
+// import { exec } from 'child_process'; // Duplicate, already imported above
+// import { Mistral } from '@mistralai/mistralai'; // Duplicate, already imported above
+// const mistralApiKey = process.env.MISTRAL_API_KEY; // Duplicate, already declared above
+// const mistralClient = new Mistral({ apiKey: mistralApiKey }); // Duplicate, already declared above
+// const MAX_RETRIES = 2; // Duplicate, already declared above
+
+export class SingleAstroValidator {
+  static async validateAndFix(code: string, renderingDir: string): Promise<string> {
+    let currentCode = code;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const { isValid, error } = await this.compileAstro(currentCode, renderingDir);
+      if (isValid) {
+        console.log('[SingleAstroValidator] ✅ Astro code validation successful.');
+        return currentCode;
+      }
+      console.warn(`[SingleAstroValidator] ⚠️ Astro validation failed on attempt ${attempt + 1}. Error: ${error}`);
+      if (attempt < MAX_RETRIES) {
+        console.log('[SingleAstroValidator] Retrying with AI-powered correction...');
+        currentCode = await this.getAiFix(currentCode, error);
+      } else {
+        console.error('[SingleAstroValidator] ❌ AI failed to fix the Astro code after max attempts.');
+        throw new Error(`Failed to generate valid Astro code. Last error: ${error}`);
+      }
+    }
+    throw new Error('[SingleAstroValidator] Exited validation loop unexpectedly.');
+  }
+  private static async compileAstro(code: string, renderingDir: string): Promise<{ isValid: boolean, error: string | null }> {
+    const tmpDir = path.join(renderingDir, 'src', 'components', '.tmp');
+    await fs.mkdir(tmpDir, { recursive: true });
+    const tmpFile = path.join(tmpDir, `single-validation-test-${Date.now()}.astro`);
+    try {
+      await fs.writeFile(tmpFile, code);
+      const command = `npx --no-install astro check --fail-on-warnings "${tmpFile}"`;
+      return await new Promise((resolve) => {
+        exec(command, { cwd: renderingDir }, (err, stdout, stderr) => {
+          const allOutput = (stderr || stdout) || '';
+          if (err || allOutput) {
+            resolve({ isValid: false, error: allOutput });
+          } else {
+            resolve({ isValid: true, error: null });
+          }
+        });
+      });
+    } finally {
+      await fs.unlink(tmpFile).catch(() => console.error(`[SingleAstroValidator] Failed to delete temp file: ${tmpFile}`));
+    }
+  }
+  private static async getAiFix(code: string, error: string | null): Promise<string> {
+    const systemPrompt = `You are an expert Astro developer. You will be given a piece of Astro code that has an error, along with the error message from the compiler. Your ONLY job is to fix the code to resolve the error. Respond with ONLY the corrected, complete Astro code. Do not add any explanations, markdown, or apologies.`;
+    const userMessage = `The following Astro code produced an error. Please fix it.\n\nError Message:\n---\n${error}\n---\n\nBroken Code:\n---\n${code}\n---`;
+    const response = await mistralClient.chat.complete({
+      model: 'codestral-latest',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage }
+      ],
+      temperature: 0.1,
+    });
+    const fixedCode = response.choices[0].message.content;
+    if (!fixedCode) {
+      throw new Error('[SingleAstroValidator] AI failed to return any code for the fix.');
+    }
+    // Fix for linter: only call .replace on string
+    if (typeof fixedCode === 'string') {
+      return fixedCode.replace(/```(astro)?/g, '').trim();
+    }
+    // If not a string, return as is or throw
+    // return fixedCode;
+    throw new Error('AI failed to return valid string code for the fix.');
+  }
+}
+
+const CODEGEN_SYSTEM_PROMPT = `You are a world-class AI developer specializing in creating production-ready Astro components using Tailwind CSS and Preline UI. Your code should be clean, semantic, and follow best practices.
+
+**CRITICAL DIRECTIVES:**
+1.  **ATOMIC COMPONENTS (STRICT):**
+    *   **ONE SECTION ONLY:** Each component MUST contain ONLY its designated section. If creating a "Menu" component, it should contain ONLY the navigation/menu section. If creating a "Hero" component, it should contain ONLY the hero section. NEVER include multiple sections in a single component.
+    *   **NO FULL PAGES:** Do NOT create complete landing pages with multiple sections. Each component is a building block that will be assembled into a complete page later.
+    *   **NO HTML/HEAD/BODY:** Do NOT include <!DOCTYPE html>, <html>, <head>, or <body> tags. These are page-level elements, not component-level elements.
+
+2.  **TECH STACK:**
+    *   **Astro:** Generate a valid, single-file Astro component (.astro).
+    *   **Tailwind CSS:** All styling MUST be done with Tailwind CSS utility classes.
+    *   **Preline UI:** You MUST use Preline UI components (see https://preline.co/ for components like headers, dropdowns, cards, etc.) to create modern, professional-looking layouts. This is a strict requirement for design consistency.
+
+3.  **CODE QUALITY:**
+    *   **Correct Tag Usage:** You MUST use the correct, top-level semantic HTML tag. For example, a component named \`Footer\` MUST use a \`<footer>\` tag, not \`<header>\`. A component named \`Testimonial\` or \`Hero\` should use a \`<section>\` tag.
+    *   **Semantic HTML:** Use appropriate HTML5 tags like \`<header>\`, \`<nav>\`, \`<section>\`, \`<figure>\`, etc. For a navigation bar, use \`<header>\` and \`<nav>\`.
+    *   **Data Separation (Strict):** You MUST separate content from presentation. ALL text content (headings, paragraphs, button text, labels, etc.), link URLs, and lists of items MUST be defined as constants in the \`---\` frontmatter. The HTML body must then reference these variables. **There are no exceptions to this rule; do not hardcode ANY text directly in the HTML body.**
+    *   **Dynamic & Reusable:** Avoid hardcoding content. For navigation links, generate anchor links (e.g., \`href="#faq"\`) based on the item name. For logos or brand names, use a generic placeholder like "Logo" or "Brand Name" that is easy for the user to replace.
+    *   **Production-Ready:** The generated component must be complete and ready to use. No "Lorem Ipsum" or unfinished parts.
+
+3.  **NAVIGATION COMPONENTS:**
+    *   **Structure:** Navigation items MUST be defined as an array in the frontmatter with all properties (text, href, submenu items).
+    *   **Layout:** Follow the user's layout instructions exactly (e.g., "logo on left, items on right").
+    *   **Submenus:** If a menu item has submenus, use Preline's dropdown component (\`hs-dropdown\`) and nest the submenu items properly.
+    *   **Mobile:** Always include a mobile-responsive hamburger menu using Preline's collapse component.
+
+4.  **COMPONENT STRUCTURE:**
+    *   Only include a \`---\` frontmatter section if you need to define props or import something. Keep it minimal. Most components should not need it.
+
+5.  **RESPONSE FORMAT:**
+    *   Your response MUST be ONLY the raw Astro code. No explanations, no markdown, no apologies. Just the code.
+
+**EXAMPLE OF A GOOD ATOMIC MENU COMPONENT:**
+\`\`\`astro
+---
+const navItems = [
+  { text: "Home", href: "#home" },
+  { text: "Features", href: "#features", submenu: [
+    { text: "Core Features", href: "#core-features" },
+    { text: "Advanced", href: "#advanced" }
+  ]},
+  { text: "Pricing", href: "#pricing" }
+];
+
+const brandName = "Your Brand";
+---
+<header class="flex flex-wrap sm:justify-start sm:flex-nowrap z-50 w-full bg-white text-sm py-3 sm:py-0">
+  <nav class="relative max-w-7xl w-full mx-auto px-4 sm:flex sm:items-center sm:justify-between sm:px-6 lg:px-8" aria-label="Global">
+    <div class="flex items-center justify-between">
+      <a class="flex-none text-xl font-semibold" href="#" aria-label="Brand">{brandName}</a>
+      <div class="sm:hidden">
+        <button type="button" class="hs-collapse-toggle p-2 inline-flex justify-center items-center gap-2 rounded-lg border font-medium bg-white text-gray-700 shadow-sm align-middle hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white focus:ring-blue-600 transition-all text-sm" data-hs-collapse="#navbar-collapse-with-animation" aria-controls="navbar-collapse-with-animation" aria-label="Toggle navigation">
+          <svg class="hs-collapse-open:hidden flex-shrink-0 size-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/></svg>
+          <svg class="hs-collapse-open:block hidden flex-shrink-0 size-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="navbar-collapse-with-animation" class="hs-collapse hidden overflow-hidden transition-all duration-300 basis-full grow sm:block">
+      <div class="flex flex-col gap-y-4 gap-x-0 mt-5 sm:flex-row sm:items-center sm:justify-end sm:gap-y-0 sm:gap-x-7 sm:mt-0 sm:ps-7">
+        {navItems.map(item => (
+          <div class="hs-dropdown relative inline-flex">
+            <a class="font-medium text-gray-500 hover:text-gray-400 sm:py-6" href={item.href}>{item.text}</a>
+            {item.submenu && (
+              <div class="hs-dropdown-menu transition-[opacity,margin] duration hs-dropdown-open:opacity-100 opacity-0 hidden min-w-60 bg-white shadow-md rounded-lg p-2 mt-2" aria-labelledby="hs-dropdown-basic">
+                {item.submenu.map(subItem => (
+                  <a class="flex items-center gap-x-3.5 py-2 px-3 rounded-lg text-sm text-gray-800 hover:bg-gray-100 focus:ring-2 focus:ring-blue-500" href={subItem.href}>{subItem.text}</a>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  </nav>
+</header>
+\`\`\`
+
+**EXAMPLE OF A GOOD ATOMIC HERO COMPONENT:**
+\`\`\`astro
+---
+const heroTitle = "Find Your Dream Home";
+const heroSubtitle = "Discover the perfect property with our expert guidance.";
+const heroButtonText = "Get Started";
+---
+<section class="bg-gray-100 py-20">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+    <h1 class="text-4xl font-bold text-gray-900">{heroTitle}</h1>
+    <p class="mt-4 text-lg text-gray-600">{heroSubtitle}</p>
+    <a href="#features" class="mt-8 inline-block bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-700">{heroButtonText}</a>
+  </div>
+</section>
+\`\`\`
+`;
+
+export interface GenerateFileInstructions {
+  componentName: string;
+  generationPrompt: string;
+  originalPrompt: string;
+  mode?: 'abstract' | 'vision' | 'edit' | string; // for future extensibility
+  componentNames?: string[]; // for abstract mode
+}
+
+// === SINGLE PIPELINE DEDICATED CONSTANTS ===
+const SINGLE_MAX_RETRIES = 2;
+const SINGLE_CODEGEN_SYSTEM_PROMPT = `You are a world-class AI developer specializing in creating production-ready Astro components using Tailwind CSS and Preline UI. Your code should be clean, semantic, and follow best practices.
+
+**AVATAR REQUIREMENT:** For testimonials, use ONLY these exact filenames: Avatar_man.avif, Avatar_man2.avif, Avatar_man3.avif, Avatar_man4.avif, Avatar_man6.avif, Avatar_man7.avif, Avatar_woman.avif, Avatar_woman2.avif, Avatar_woman3.avif, Avatar_woman4.avif, Avatar_woman5.avif
+
+**CRITICAL DIRECTIVES:**
+1.  **ATOMIC COMPONENTS (STRICT):**
+    *   **ONE SECTION ONLY:** Each component MUST contain ONLY its designated section. If creating a "Menu" component, it should contain ONLY the navigation/menu section. If creating a "Hero" component, it should contain ONLY the hero section. NEVER include multiple sections in a single component.
+    *   **NO FULL PAGES:** Do NOT create complete landing pages with multiple sections. Each component is a building block that will be assembled into a complete page later.
+    *   **NO HTML/HEAD/BODY:** Do NOT include <!DOCTYPE html>, <html>, <head>, or <body> tags. These are page-level elements, not component-level elements.
+
+2.  **TECH STACK:**
+    *   **Astro:** Generate a valid, single-file Astro component (.astro).
+    *   **Tailwind CSS:** All styling MUST be done with Tailwind CSS utility classes.
+    *   **Preline UI:** You MUST use Preline UI components (see https://preline.co/ for components like headers, dropdowns, cards, etc.) to create modern, professional-looking layouts. This is a strict requirement for design consistency.
+
+3.  **IMAGES AND VISUAL CONTENT (CRITICAL):**
+    *   **ALWAYS INCLUDE IMAGES:** Every component MUST include relevant images, icons, and visual elements. This is NOT optional.
+    *   **Image Sources:** Use high-quality images from:
+
+      - Lucide React icons for icons (import from \`@lucide/astro\`)
+      - Font Awesome icons when needed
+    *   **Image Types by Component:**
+      - **Hero:** Background images, product images, lifestyle photos
+      - **Features:** Icons, product mockups, screenshots
+      - **Testimonials:** Avatar images, customer photos
+      - **Products:** Product images, mockups, lifestyle shots
+      - **Gallery:** Multiple high-quality images
+      - **About:** Team photos, office images, process diagrams
+    *   **Image Optimization:** Always include \`alt\` attributes and responsive sizing
+    *   **Visual Hierarchy:** Use images to create visual interest and guide user attention
+
+4.  **CODE QUALITY:**
+    *   **Correct Tag Usage:** You MUST use the correct, top-level semantic HTML tag. For example, a component named \`Footer\` MUST use a \`<footer>\` tag, not \`<header>\`. A component named \`Testimonial\` or \`Hero\` should use a \`<section>\` tag.
+    *   **Semantic HTML:** Use appropriate HTML5 tags like \`<header>\`, \`<nav>\`, \`<section>\`, \`<figure>\`, etc. For a navigation bar, use \`<header>\` and \`<nav>\`.
+    *   **Data Separation (Strict):** You MUST separate content from presentation. ALL text content (headings, paragraphs, button text, labels, etc.), link URLs, and lists of items MUST be defined as constants in the \`---\` frontmatter. The HTML body must then reference these variables. **There are no exceptions to this rule; do not hardcode ANY text directly in the HTML body.**
+    *   **Dynamic & Reusable:** Avoid hardcoding content. For navigation links, generate anchor links (e.g., \`href="#faq"\`) based on the item name. For logos or brand names, use a generic placeholder like "Logo" or "Brand Name" that is easy for the user to replace.
+    *   **Production-Ready:** The generated component must be complete and ready to use. No "Lorem Ipsum" or unfinished parts.
+
+5.  **NAVIGATION COMPONENTS:**
+    *   **Structure:** Navigation items MUST be defined as an array in the frontmatter with all properties (text, href, submenu items).
+    *   **Layout:** Follow the user's layout instructions exactly (e.g., "logo on left, items on right").
+    *   **Submenus:** If a menu item has submenus, use Preline's dropdown component (\`hs-dropdown\`) and nest the submenu items properly.
+    *   **Mobile:** Always include a mobile-responsive hamburger menu using Preline's collapse component.
+
+6.  **COMPONENT STRUCTURE:**
+    *   Only include a \`---\` frontmatter section if you need to define props or import something. Keep it minimal. Most components should not need it.
+
+7.  **RESPONSE FORMAT:**
+    *   Your response MUST be ONLY the raw Astro code. No explanations, no markdown, no apologies. Just the code.
+
+**EXAMPLE OF A GOOD ATOMIC MENU COMPONENT:**
+\`\`\`astro
+---
+const navItems = [
+  { text: "Home", href: "#home" },
+  { text: "Features", href: "#features", submenu: [
+    { text: "Core Features", href: "#core-features" },
+    { text: "Advanced", href: "#advanced" }
+  ]},
+  { text: "Pricing", href: "#pricing" }
+];
+
+const brandName = "Your Brand";
+---
+<header class="flex flex-wrap sm:justify-start sm:flex-nowrap z-50 w-full bg-white text-sm py-3 sm:py-0">
+  <nav class="relative max-w-7xl w-full mx-auto px-4 sm:flex sm:items-center sm:justify-between sm:px-6 lg:px-8" aria-label="Global">
+    <div class="flex items-center justify-between">
+      <a class="flex-none text-xl font-semibold" href="#" aria-label="Brand">{brandName}</a>
+      <div class="sm:hidden">
+        <button type="button" class="hs-collapse-toggle p-2 inline-flex justify-center items-center gap-2 rounded-lg border font-medium bg-white text-gray-700 shadow-sm align-middle hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white focus:ring-blue-600 transition-all text-sm" data-hs-collapse="#navbar-collapse-with-animation" aria-controls="navbar-collapse-with-animation" aria-label="Toggle navigation">
+          <svg class="hs-collapse-open:hidden flex-shrink-0 size-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/></svg>
+          <svg class="hs-collapse-open:block hidden flex-shrink-0 size-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="navbar-collapse-with-animation" class="hs-collapse hidden overflow-hidden transition-all duration-300 basis-full grow sm:block">
+      <div class="flex flex-col gap-y-4 gap-x-0 mt-5 sm:flex-row sm:items-center sm:justify-end sm:gap-y-0 sm:gap-x-7 sm:mt-0 sm:ps-7">
+        {navItems.map(item => (
+          <div class="hs-dropdown relative inline-flex">
+            <a class="font-medium text-gray-500 hover:text-gray-400 sm:py-6" href={item.href}>{item.text}</a>
+            {item.submenu && (
+              <div class="hs-dropdown-menu transition-[opacity,margin] duration hs-dropdown-open:opacity-100 opacity-0 hidden min-w-60 bg-white shadow-md rounded-lg p-2 mt-2" aria-labelledby="hs-dropdown-basic">
+                {item.submenu.map(subItem => (
+                  <a class="flex items-center gap-x-3.5 py-2 px-3 rounded-lg text-sm text-gray-800 hover:bg-gray-100 focus:ring-2 focus:ring-blue-500" href={subItem.href}>{subItem.text}</a>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  </nav>
+</header>
+\`\`\`
+
+**EXAMPLE OF A GOOD ATOMIC HERO COMPONENT:**
+\`\`\`astro
+---
+const heroTitle = "Find Your Dream Home";
+const heroSubtitle = "Discover the perfect property with our expert guidance.";
+const heroButtonText = "Get Started";
+---
+<section class="bg-gray-100 py-20">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+    <h1 class="text-4xl font-bold text-gray-900">{heroTitle}</h1>
+    <p class="mt-4 text-lg text-gray-600">{heroSubtitle}</p>
+    <a href="#features" class="mt-8 inline-block bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-700">{heroButtonText}</a>
+  </div>
+</section>
+\`\`\`
+`;
+
+// === ABSTRACT PIPELINE DEDICATED CONSTANTS ===
+const ABSTRACT_MAX_RETRIES = 2;
+const ABSTRACT_CODEGEN_SYSTEM_PROMPT = `You are a world-class AI developer specializing in creating production-ready Astro components using Tailwind CSS and Preline UI. Your code should be clean, semantic, and follow best practices.
+
+**CRITICAL DIRECTIVES:**
+1.  **ATOMIC COMPONENTS (STRICT):**
+    *   **ONE SECTION ONLY:** Each component MUST contain ONLY its designated section. If creating a "Menu" component, it should contain ONLY the navigation/menu section. If creating a "Hero" component, it should contain ONLY the hero section. NEVER include multiple sections in a single component.
+    *   **NO FULL PAGES:** Do NOT create complete landing pages with multiple sections. Each component is a building block that will be assembled into a complete page later.
+    *   **NO HTML/HEAD/BODY:** Do NOT include <!DOCTYPE html>, <html>, <head>, or <body> tags. These are page-level elements, not component-level elements.
+
+2.  **TECH STACK:**
+    *   **Astro:** Generate a valid, single-file Astro component (.astro).
+    *   **Tailwind CSS:** All styling MUST be done with Tailwind CSS utility classes.
+    *   **Preline UI:** You MUST use Preline UI components (see https://preline.co/ for components like headers, dropdowns, cards, etc.) to create modern, professional-looking layouts. This is a strict requirement for design consistency.
+
+3.  **IMAGES AND VISUAL CONTENT (CRITICAL):**
+    *   **ALWAYS INCLUDE IMAGES:** Every component MUST include relevant images, icons, and visual elements. This is NOT optional.
+    *   **Image Sources:** Use high-quality images from Freepik Stock Content API:
+      - The system will automatically fetch images from Freepik API based on component type
+      - For avatars, use local images from \`/images/avatars/\` folder
+      - Use Lucide React icons for icons (import from \`@lucide/astro\`)
+      - Font Awesome icons when needed
+      - **IMPORTANT:** Use placeholder patterns like \`"path/to/image"\` for images - the system will automatically replace these with actual Freepik URLs
+    *   **Image Types by Component:**
+      - **Hero:** Background images, product images, lifestyle photos from Freepik
+      - **Features:** Icons, product mockups, screenshots from Freepik
+      - **Testimonials:** Avatar images, customer photos from Freepik
+      - **Products:** Product images, mockups, lifestyle shots from Freepik
+      - **Gallery:** Multiple high-quality images from Freepik
+      - **About:** Team photos, office images, process diagrams from Freepik
+    *   **Image Optimization:** Always include \`alt\` attributes and responsive sizing
+    *   **Visual Hierarchy:** Use images to create visual interest and guide user attention
+
+4.  **CODE QUALITY:**
+    *   **Correct Tag Usage:** You MUST use the correct, top-level semantic HTML tag. For example, a component named \`Footer\` MUST use a \`<footer>\` tag, not \`<header>\`. A component named \`Testimonial\` or \`Hero\` should use a \`<section>\` tag.
+    *   **Semantic HTML:** Use appropriate HTML5 tags like \`<header>\`, \`<nav>\`, \`<section>\`, \`<figure>\`, etc. For a navigation bar, use \`<header>\` and \`<nav>\`.
+    *   **Data Separation (Strict):** You MUST separate content from presentation. ALL text content (headings, paragraphs, button text, labels, etc.), link URLs, and lists of items MUST be defined as constants in the \`---\` frontmatter. The HTML body must then reference these variables. **There are no exceptions to this rule; do not hardcode ANY text directly in the HTML body.**
+    *   **Dynamic & Reusable:** Avoid hardcoding content. For navigation links, generate anchor links (e.g., \`href="#faq"\`) based on the item name. For logos or brand names, use a generic placeholder like "Logo" or "Brand Name" that is easy for the user to replace.
+    *   **Production-Ready:** The generated component must be complete and ready to use. No "Lorem Ipsum" or unfinished parts.
+
+5.  **NAVIGATION COMPONENTS:**
+    *   **Structure:** Navigation items MUST be defined as an array in the frontmatter with all properties (text, href, submenu items).
+    *   **Layout:** Follow the user's layout instructions exactly (e.g., "logo on left, items on right").
+    *   **Submenus:** If a menu item has submenus, use Preline's dropdown component (\`hs-dropdown\`) and nest the submenu items properly.
+    *   **Mobile:** Always include a mobile-responsive hamburger menu using Preline's collapse component.
+
+6.  **COMPONENT STRUCTURE:**
+    *   Only include a \`---\` frontmatter section if you need to define props or import something. Keep it minimal. Most components should not need it.
+
+7.  **RESPONSE FORMAT:**
+    *   Your response MUST be ONLY the raw Astro code. No explanations, no markdown, no apologies. Just the code.
+
+**EXAMPLE OF A GOOD ATOMIC MENU COMPONENT:**
+\`\`\`astro
+---
+const navItems = [
+  { text: "Home", href: "#home" },
+  { text: "Features", href: "#features", submenu: [
+    { text: "Core Features", href: "#core-features" },
+    { text: "Advanced", href: "#advanced" }
+  ]},
+  { text: "Pricing", href: "#pricing" }
+];
+
+const brandName = "Your Brand";
+---
+<header class="flex flex-wrap sm:justify-start sm:flex-nowrap z-50 w-full bg-white text-sm py-3 sm:py-0">
+  <nav class="relative max-w-7xl w-full mx-auto px-4 sm:flex sm:items-center sm:justify-between sm:px-6 lg:px-8" aria-label="Global">
+    <div class="flex items-center justify-between">
+      <a class="flex-none text-xl font-semibold" href="#" aria-label="Brand">{brandName}</a>
+      <div class="sm:hidden">
+        <button type="button" class="hs-collapse-toggle p-2 inline-flex justify-center items-center gap-2 rounded-lg border font-medium bg-white text-gray-700 shadow-sm align-middle hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white focus:ring-blue-600 transition-all text-sm" data-hs-collapse="#navbar-collapse-with-animation" aria-controls="navbar-collapse-with-animation" aria-label="Toggle navigation">
+          <svg class="hs-collapse-open:hidden flex-shrink-0 size-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/></svg>
+          <svg class="hs-collapse-open:block hidden flex-shrink-0 size-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="navbar-collapse-with-animation" class="hs-collapse hidden overflow-hidden transition-all duration-300 basis-full grow sm:block">
+      <div class="flex flex-col gap-y-4 gap-x-0 mt-5 sm:flex-row sm:items-center sm:justify-end sm:gap-y-0 sm:gap-x-7 sm:mt-0 sm:ps-7">
+        {navItems.map(item => (
+          <div class="hs-dropdown relative inline-flex">
+            <a class="font-medium text-gray-500 hover:text-gray-400 sm:py-6" href={item.href}>{item.text}</a>
+            {item.submenu && (
+              <div class="hs-dropdown-menu transition-[opacity,margin] duration hs-dropdown-open:opacity-100 opacity-0 hidden min-w-60 bg-white shadow-md rounded-lg p-2 mt-2" aria-labelledby="hs-dropdown-basic">
+                {item.submenu.map(subItem => (
+                  <a class="flex items-center gap-x-3.5 py-2 px-3 rounded-lg text-sm text-gray-800 hover:bg-gray-100 focus:ring-2 focus:ring-blue-500" href={subItem.href}>{subItem.text}</a>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  </nav>
+</header>
+\`\`\`
+
+**EXAMPLE OF A GOOD ATOMIC HERO COMPONENT:**
+\`\`\`astro
+---
+const heroTitle = "Find Your Dream Home";
+const heroSubtitle = "Discover the perfect property with our expert guidance.";
+const heroButtonText = "Get Started";
+---
+<section class="bg-gray-100 py-20">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+    <h1 class="text-4xl font-bold text-gray-900">{heroTitle}</h1>
+    <p class="mt-4 text-lg text-gray-600">{heroSubtitle}</p>
+    <a href="#features" class="mt-8 inline-block bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-700">{heroButtonText}</a>
+  </div>
+</section>
+\`\`\`
+`;
+
+// === GENERIC PIPELINE DEDICATED FUNCTIONS ===
+// Generic pipeline dedicated directory functions (completely independent)
+function getGenericComponentsDir(subpath: string = ''): string {
+  // Generic pipeline uses its own directory logic - goes up one level from /interface to project root
+  const genericProjectRoot = path.resolve(process.cwd(), '..');
+  return path.join(genericProjectRoot, 'rendering', 'src', 'components', subpath);
+}
+
+function getGenericPagesDir(subpath: string = ''): string {
+  // Generic pipeline uses its own directory logic - goes up one level from /interface to project root
+  const genericProjectRoot = path.resolve(process.cwd(), '..');
+  return path.join(genericProjectRoot, 'rendering', 'src', 'pages', subpath);
+}
+
+// Generic pipeline dedicated function to sanitize component names for safe file names
+function sanitizeGenericComponentName(componentName: string): string {
+  return componentName
+    .replace(/\s+/g, '') // Remove all spaces first
+    .replace(/[^a-zA-Z0-9]/g, '') // Remove all non-alphanumeric characters
+    .replace(/^([a-z])/, (match) => match.toUpperCase()) // Capitalize first letter
+    .replace(/^([A-Z])/, (match) => match) // Keep first letter capitalized
+    || 'Component'; // Fallback if empty
+}
+
+// Generic pipeline dedicated mockup image path function
+async function getGenericMockupImagePath(prompt?: string): Promise<string> {
+  // Generic pipeline uses enhanced image service with Freepik integration
+  const { enhancedImageService } = await import('../services/image-service');
+  return await enhancedImageService.getMockupImage(undefined, prompt);
+}
+
+// Generic pipeline dedicated index.astro update function
+async function updateGenericIndexAstroWithSections(componentNames: string[]) {
+  const pagesDir = getGenericPagesDir(); // Use Generic-specific directory function
+  const indexPath = path.join(pagesDir, 'index.astro');
+  let content = await fs.readFile(indexPath, 'utf-8');
+
+  // Helper function to convert to PascalCase consistently
+  const toPascalCase = (name: string): string => {
+    return name
+      .replace(/[^a-zA-Z0-9]+/g, ' ') // Replace non-alphanumeric with space
+      .split(' ')
+      .filter(Boolean)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join('');
+  };
+
+  // Remove all previous imports and SectionWrappers for these components
+  for (const componentName of componentNames) {
+    const sanitizedName = sanitizeGenericComponentName(componentName);
+    const pascalName = toPascalCase(sanitizedName.replace('.astro', ''));
+    const importRegex = new RegExp(`import ${pascalName} from ['"].*${pascalName}\.astro['"];?\n?`, 'g');
+    content = content.replace(importRegex, '');
+  }
+
+  // Remove ALL existing SectionWrapper blocks to prevent duplicates
+  content = content.replace(/<SectionWrapper[^>]*>[\s\S]*?<\/SectionWrapper>\s*/g, '');
+
+  // Add imports for all components after the last import, avoiding duplicates
+  const lastImportIndex = content.lastIndexOf('import');
+  const endOfLastImport = content.indexOf('\n', lastImportIndex);
+  let importBlock = '';
+  const addedImports = new Set<string>(); // Track added imports to avoid duplicates
+  
+  for (const componentName of componentNames) {
+    const sanitizedName = sanitizeGenericComponentName(componentName);
+    const pascalName = toPascalCase(sanitizedName.replace('.astro', ''));
+    
+    // Only add import if not already present
+    if (!addedImports.has(pascalName) && !content.includes(`import ${pascalName} from`)) {
+      importBlock += `import ${pascalName} from '../components/${pascalName}.astro';\n`;
+      addedImports.add(pascalName);
+    }
+  }
+  
+  content = content.slice(0, endOfLastImport + 1) + importBlock + content.slice(endOfLastImport + 1);
+
+  // Add SectionWrappers for all components in order, before </main> or </body>
+  let sectionBlock = '';
+  for (const componentName of componentNames) {
+    const sanitizedName = sanitizeGenericComponentName(componentName);
+    const pascalName = toPascalCase(sanitizedName.replace('.astro', ''));
+    // Use original component name for section ID (lowercase, replace spaces with hyphens)
+    const sectionId = componentName.toLowerCase().replace(/\s+/g, '-');
+    sectionBlock += `\n    <SectionWrapper id="${sectionId}">\n      <${pascalName} />\n    </SectionWrapper>\n`;
+  }
+  if (content.includes('</main>')) {
+    content = content.replace('</main>', `${sectionBlock}\n</main>`);
+  } else {
+    content = content.replace('</body>', `${sectionBlock}\n</body>`);
+  }
+
+  await fs.writeFile(indexPath, content);
+  console.log(`[TRACE][Generic] Updated index.astro to include all generated sections.`);
+}
+
+// ===============================
+// PIPELINE: CREATE - SINGLE COMPONENT (Fully Independent)
+// ===============================
+
+/**
+ * SingleComponentPipeline: Handles the 'Create: Single Component' pipeline.
+ * This pipeline is 100% independent and does not share any logic with other pipelines.
+ * It generates a single Astro component from a prompt.
+ */
+async function runSingleComponentPipeline({ componentName, prompt }: { componentName: string, prompt: string }): Promise<{ success: boolean; componentPath: string }> {
+  console.log('=== [TRACE] Entered Single Component Create Pipeline ===');
+  const componentDir = getSingleComponentsDir(); // Use Single-specific directory function
+  const filePath = path.join(componentDir, `${sanitizeSingleComponentName(componentName)}.astro`); // Use Single-specific sanitization
+
+  console.log(`[TRACE][Single] Generating single component: ${componentName}`);
+
+  // Inject domain security context into system prompt
+  const systemPrompt = await DomainSecurityService.injectIntoSystemPrompt(SINGLE_CODEGEN_SYSTEM_PROMPT);
+  
+  // Always include SINGLE_CODEGEN_SYSTEM_PROMPT as the first message
+  const response = await new Mistral({ apiKey: process.env.MISTRAL_API_KEY! }).chat.complete({
+    model: 'codestral-latest',
+    messages: [
+      { role: 'system', content: systemPrompt }, // Use Single-specific system prompt with domain security
+      { role: 'user', content: prompt }
+    ],
+    temperature: 0.1,
+  });
+  let generatedCode = response.choices[0].message.content;
+  if (!generatedCode || typeof generatedCode !== 'string') {
+    throw new Error('AI failed to generate valid string code for the component.');
+  }
+  let cleanedCode = generatedCode.replace(/```(astro)?/g, '').trim();
+  const mockupPath = await getSingleMockupImagePath(); // Use Single-specific mockup path
+  // Replace various placeholder patterns with actual image URLs
+  cleanedCode = cleanedCode.replace(/"([\/]?path[\/]to[\/]?[^\"]+)"/g, `"${mockupPath}"`); // Use Single-specific mockup path
+  cleanedCode = cleanedCode.replace(/"https:\/\/api\.freepik\.com\/images\/[^"]*"/g, `"${mockupPath}"`); // Replace Freepik placeholder URLs
+  cleanedCode = cleanedCode.replace(/"https:\/\/img\.freepik\.com\/[^"]*"/g, `"${mockupPath}"`); // Replace Freepik image URLs
+  
+  // Replace avatar placeholders with local avatar images
+  const avatarPath = await enhancedImageService.getAvatarImage();
+  cleanedCode = cleanedCode.replace(/"path\/to\/avatar"/g, `"${avatarPath}"`);
+  cleanedCode = cleanedCode.replace(/"https:\/\/api\.freepik\.com\/images\/avatar\/[^"]*"/g, `"${avatarPath}"`);
+  cleanedCode = cleanedCode.replace(/"\/images\/avatars\/[^"]*\.jpg"/g, `"${avatarPath}"`); // Replace hardcoded jpg paths
+  cleanedCode = cleanedCode.replace(/"\/images\/avatars\/[^"]*\.png"/g, `"${avatarPath}"`); // Replace hardcoded png paths
+  cleanedCode = cleanedCode.replace(/\skey=\{[^}]+\}/g, '');
+  // Additional avatar path replacements for hardcoded paths
+  cleanedCode = cleanedCode.replace(/"\/images\/avatars\/[^"]*\.jpg"/g, `"${avatarPath}"`); // Replace hardcoded jpg paths
+  cleanedCode = cleanedCode.replace(/"\/images\/avatars\/[^"]*\.png"/g, `"${avatarPath}"`); // Replace hardcoded png paths
+  cleanedCode = cleanedCode.replace(/<input([^>]*?)type=\{([^}]+)\}([^>]*)>/g, (match, before, typeExpr, after) => {
+    return `<input${before}type={String(${typeExpr}) as HTMLInputTypeAttribute}${after}>`;
+  });
+
+  // Write the file first
+  await fs.writeFile(filePath, cleanedCode);
+  // === Only run validation/auto-fix if file is directly inside /rendering/src/components (not subfolders) ===
+  const renderingComponentsDir = path.resolve(getSingleComponentsDir()); // Use Single-specific directory function
+  const fileAbsPath = path.resolve(filePath);
+  const fileParentDir = path.dirname(fileAbsPath);
+  console.log(`[DEBUG] file: ${fileAbsPath}, parent: ${fileParentDir}, target: ${renderingComponentsDir}`);
+  let shouldUpdateIndex = false;
+  if (fileParentDir === renderingComponentsDir) {
+    // const fileContent = await fs.readFile(filePath, 'utf-8');
+    // === FULLY COMMENTED OUT: NO VALIDATION OR AUTO-FIX FOR SINGLE MODE CREATION ===
+    // const { isValid, error } = await SingleAstroValidator.compileAstro(fileContent, renderingComponentsDir);
+    // if (!isValid) {
+    //   console.log(`[SingleComponentPipeline] Real error detected in new component, running auto-fix for: ${filePath}`);
+    //   const validatedCode = await SingleAstroValidator.validateAndFix(fileContent, renderingComponentsDir);
+    //   await fs.writeFile(filePath, validatedCode);
+    //   console.log(`[SingleComponentPipeline] Astro validation/auto-fix applied to: ${filePath}`);
+    // } else {
+    //   console.log(`[SingleComponentPipeline] No real errors detected, skipping auto-fix for: ${filePath}`);
+    // }
+    shouldUpdateIndex = true;
+  } else {
+    // Strict: never validate or auto-fix any other files
+    console.log(`[SKIP][SingleComponentPipeline] Not validating: ${fileAbsPath} (parent: ${fileParentDir}, only validate new file in /rendering/src/components root)`);
+  }
+  if (shouldUpdateIndex) {
+    await updateSingleIndexAstroComponent(componentName, prompt); // Use Single-specific index update
+    console.log(`[TRACE][Single] Updated index.astro with ${componentName} (single pipeline logic)`);
+  } else {
+    console.log(`[TRACE][Single] Skipped index.astro update due to not being in root components dir for: ${componentName}`);
+  }
+  console.log(`[TRACE][Single] Created and validated component: ${filePath}`);
+  console.log('=== [TRACE] Exiting Single Component Create Pipeline ===');
+  return { success: true, componentPath: filePath };
+}
+
+// ===============================
+// PIPELINE: CREATE - ABSTRACT (Fully Independent)
+// ===============================
+
+interface CreateAbstractInstructions {
+  componentNames: string[];
+  prompt: string;
+}
+
+/**
+ * AbstractCreatePipeline: Handles the 'Create: Abstract' pipeline.
+ * This pipeline is 100% independent and does not share any logic with other pipelines.
+ * It generates multiple atomic sections/components from a single prompt using dataset examples.
+ */
+async function runAbstractCreatePipeline({ componentNames, prompt }: CreateAbstractInstructions): Promise<{ success: boolean; componentPaths: string[] }> {
+  console.log('=== [TRACE] Entered Abstract Create Pipeline ===');
+  const componentDir = getAbstractComponentsDir(); // Use Abstract-specific directory function
+  const createdPaths: string[] = [];
+
+  for (const componentName of componentNames) {
+    console.log(`[TRACE][Abstract] Generating atomic section: ${componentName}`);
+    
+    // === ENHANCE PROMPT WITH UI DATASET EXAMPLES ===
+    const basePrompt = `Create ONLY the ${componentName} section as a single, production-ready Astro component named '${componentName}'. Do NOT include any other sections or unrelated content. Do NOT include a full page. Only the ${componentName} section.\n\nUSER INSTRUCTIONS: ${prompt}`;
+    
+    const enhancedPrompt = await PromptEnhancer.enhanceComponentPrompt(componentName, basePrompt);
+    console.log(`[TRACE][Abstract] Enhanced prompt for ${componentName} with ${enhancedPrompt.examplesUsed} UI examples`);
+    
+    const response = await mistralClient.chat.complete({
+      model: 'codestral-latest',
+      messages: [
+        { role: 'system', content: ABSTRACT_CODEGEN_SYSTEM_PROMPT }, // Use Abstract-specific system prompt
+        { role: 'user', content: enhancedPrompt.enhancedPrompt }
+      ],
+      temperature: 0.1,
+    });
+    let generatedCode = response.choices[0].message.content;
+    if (!generatedCode || typeof generatedCode !== 'string') {
+      throw new Error(`AI failed to generate valid string code for the component: ${componentName}`);
+    }
+      let cleanedCode = generatedCode.replace(/```(astro)?/g, '').trim();
+  const mockupPath = await getAbstractMockupImagePath(); // Use Abstract-specific mockup path
+  // Replace various placeholder patterns with actual image URLs
+  cleanedCode = cleanedCode.replace(/"([\/]?path[\/]to[\/]?[^\"]+)"/g, `"${mockupPath}"`); // Use Abstract-specific mockup path
+  cleanedCode = cleanedCode.replace(/"https:\/\/api\.freepik\.com\/images\/[^"]*"/g, `"${mockupPath}"`); // Replace Freepik placeholder URLs
+  cleanedCode = cleanedCode.replace(/"https:\/\/img\.freepik\.com\/[^"]*"/g, `"${mockupPath}"`); // Replace Freepik image URLs
+  
+  // Replace avatar placeholders with local avatar images
+  const avatarPath = await enhancedImageService.getAvatarImage();
+  cleanedCode = cleanedCode.replace(/"path\/to\/avatar"/g, `"${avatarPath}"`);
+  cleanedCode = cleanedCode.replace(/"https:\/\/api\.freepik\.com\/images\/avatar\/[^"]*"/g, `"${avatarPath}"`);
+  cleanedCode = cleanedCode.replace(/\skey=\{[^}]+\}/g, '');
+    cleanedCode = cleanedCode.replace(/<input([^>]*?)type=\{([^}]+)\}([^>]*)>/g, (match, before, typeExpr, after) => {
+      return `<input${before}type={String(${typeExpr}) as HTMLInputTypeAttribute}${after}>`;
+    });
+    const filePath = path.join(componentDir, `${sanitizeAbstractComponentName(componentName)}.astro`); // Use Abstract-specific sanitization
+    // === Write the file FIRST ===
+    await fs.writeFile(filePath, cleanedCode);
+    // === Only run validation/auto-fix if file is directly inside /rendering/src/components (not subfolders) ===
+    const renderingComponentsDir = path.resolve(getAbstractComponentsDir()); // Use Abstract-specific directory function
+    const fileAbsPath = path.resolve(filePath);
+    const fileParentDir = path.dirname(fileAbsPath);
+    console.log(`[DEBUG] file: ${fileAbsPath}, parent: ${fileParentDir}, target: ${renderingComponentsDir}`);
+    if (fileParentDir === renderingComponentsDir) {
+      // const fileContent = await fs.readFile(filePath, 'utf-8');
+      // const validatedCode = await AbstractAstroValidator.validateAndFix(fileContent, renderingComponentsDir);
+      // await fs.writeFile(filePath, validatedCode);
+      // console.log(`[CreateAbstractPipeline] Astro validation/auto-fix applied to: ${filePath}`);
+      // [AUTO-FIX DISABLED BY USER REQUEST]
+    } else {
+      console.log(`[SKIP] Not validating: ${fileAbsPath} (parent: ${fileParentDir})`);
+    }
+    createdPaths.push(filePath);
+    console.log(`[TRACE][Abstract] Created and validated component: ${filePath}`);
+  }
+  // After all components are created, update index.astro using Abstract-specific function
+  await updateAbstractIndexAstroWithSections(componentNames);
+  console.log('=== [TRACE] Exiting Abstract Create Pipeline ===');
+  return { success: true, componentPaths: createdPaths };
+}
+
+// ===============================
+// MAIN PIPELINE ROUTER
+// ===============================
+
+/**
+ * Main handler for the 'generate-file' tool. Routes to the correct pipeline based on instructions.mode.
+ */
+export async function executeGenerateFile(instructions: GenerateFileInstructions & { position?: string, layout?: string }): Promise<{ success: boolean; componentPath?: string; componentPaths?: string[] }> {
+  console.log('=== [TRACE] Main Pipeline Router: executeGenerateFile ===');
+  // Pipeline router
+  if (instructions.mode === 'abstract') {
+    console.log('[TRACE] Routing to Abstract Create Pipeline');
+    // Abstract pipeline: expects componentNames[] and prompt
+    if (!instructions.componentNames || !Array.isArray(instructions.componentNames)) {
+      throw new Error('Abstract mode requires componentNames array.');
+    }
+    // Use the fully independent Abstract pipeline
+    return await runAbstractCreatePipeline({
+      componentNames: instructions.componentNames,
+      prompt: instructions.originalPrompt || instructions.generationPrompt,
+    });
+  }
+  if (instructions.mode === 'vision') {
+    console.log('[TRACE] Routing to Vision Create Pipeline');
+    // Vision pipeline: expects componentName and prompt
+    if (!instructions.componentName) {
+      throw new Error('Vision mode requires componentName.');
+    }
+    // Pass layout and position if available (from orchestrator)
+    return await runVisionPipeline({
+      componentName: instructions.componentName,
+      prompt: instructions.originalPrompt || instructions.generationPrompt,
+      position: instructions.position,
+      layout: instructions.layout
+    });
+  }
+  if (instructions.mode === 'generic') {
+    console.log('[TRACE] Routing to Generic Create Pipeline');
+    // Generic pipeline: expects componentNames[] and prompt
+    if (!instructions.componentNames || !Array.isArray(instructions.componentNames)) {
+      throw new Error('Generic mode requires componentNames array.');
+    }
+    // Use the fully independent Generic pipeline
+    return await runGenericCreatePipeline({
+      componentNames: instructions.componentNames,
+      prompt: instructions.originalPrompt || instructions.generationPrompt,
+    });
+  }
+  if (instructions.mode === 'single' || (!instructions.mode && instructions.componentName)) {
+    console.log('[TRACE] Routing to Single Component Create Pipeline');
+    // Single component pipeline: expects componentName and prompt
+    return await runSingleComponentPipeline({
+      componentName: instructions.componentName,
+      prompt: instructions.originalPrompt || instructions.generationPrompt,
+    });
+  }
+  // Default: fallback to legacy single-component creation
+  try {
+    const componentPath = await runSingleComponentPipeline({
+      componentName: instructions.componentName,
+      prompt: instructions.generationPrompt,
+    });
+    // Note: updateIndexPage function was removed, using updateIndexAstroWithSections instead
+    // await updateIndexPage(instructions.componentName, instructions.originalPrompt);
+    return { success: true, componentPath: componentPath.componentPath };
+  } catch (error) {
+    console.error(`[generateFileHandler] Error creating component ${instructions.componentName}:`, error);
+    throw new Error(`Failed to generate component ${instructions.componentName}.`);
+  }
+}
+
+// ===============================
+// PIPELINE: CREATE - VISION (Fully Independent)
+// ===============================
+
+/**
+ * VisionPipeline: Handles the 'Create: Vision' pipeline.
+ * This pipeline is 100% independent and does not share any logic with other pipelines.
+ * It generates a component from a visual (image) input, using AI vision and codegen.
+ */
+async function runVisionPipeline({ componentName, prompt, position = '', layout = '' }: { componentName: string, prompt: string, position?: string, layout?: string }): Promise<{ success: boolean; componentPath: string }> {
+  console.log('=== [TRACE] Entered Vision Create Pipeline ===');
+  // Call the vision creator handler (do not share logic with other pipelines)
+  // The layout param is expected to be a base64 image string (from orchestrator)
+  // The prompt is passed for context, but the vision handler uses the image and componentName
+  try {
+    // Call the vision creator
+    const result = await executeVisionCreator({
+      componentName,
+      position,
+      imageUrl: layout
+    });
+    if (!result.success || !result.filePath) {
+      throw new Error(result.error || 'Vision pipeline failed to create component.');
+    }
+    console.log(`[VisionPipeline] Created and validated component: ${result.filePath}`);
+    return { success: true, componentPath: result.filePath };
+  } catch (error) {
+    console.error(`[VisionPipeline] Error:`, error);
+    throw error;
+  }
+}
+
+// ===============================
+// PIPELINE: CREATE - GENERIC (Fully Independent)
+// ===============================
+
+interface CreateGenericInstructions {
+  componentNames: string[];
+  prompt: string;
+}
+
+// Function to read test context file
+async function getTestContext(): Promise<string> {
+  try {
+    const testContextPath = path.join(process.cwd(), 'lib', 'context', 'test.context');
+    const testContext = await fs.readFile(testContextPath, 'utf-8');
+    return testContext;
+  } catch (error) {
+    console.log('\x1b[35m[TEST CONTEXT] Could not read test.context file, proceeding without it\x1b[0m');
+    return '';
+  }
+}
+
+// Function to check if prompt contains fashion boutique keywords
+function isFashionBoutiquePrompt(prompt: string): boolean {
+  const fashionKeywords = ['fashion boutique', 'fashion', 'boutique', 'clothing', 'apparel', 'style', 'fashion store'];
+  const lowerPrompt = prompt.toLowerCase();
+  return fashionKeywords.some(keyword => lowerPrompt.includes(keyword));
+}
+
+/**
+ * GenericPipeline: Handles the 'Create: Generic' pipeline.
+ * This pipeline is 100% independent and does not share any logic with other pipelines.
+ * It generates multiple atomic sections/components from a single prompt without using dataset examples.
+ */
+async function runGenericCreatePipeline({ componentNames, prompt }: CreateGenericInstructions): Promise<{ success: boolean; componentPaths: string[] }> {
+  console.log('🌸 [GenericPipeline] === STARTING GENERIC CREATE PIPELINE ===');
+  console.log('🌸 [GenericPipeline] Component names:', componentNames);
+  console.log('🌸 [GenericPipeline] Prompt:', prompt);
+  
+  const componentsDir = getGenericComponentsDir();
+  console.log('🌸 [GenericPipeline] Components directory:', componentsDir);
+  
+  // === THEME CACHING - EXTRACT ONCE, USE EVERYWHERE ===
+  console.log('🌸 [GenericPipeline] Extracting theme once for all components...');
+  const theme = enhancedImageService.extractThemeFromPrompt(prompt);
+  console.log('🌸 [GenericPipeline] Theme detected once:', theme);
+  
+  const generatedComponents: string[] = [];
+  
+  for (const componentName of componentNames) {
+    console.log('🌸 [GenericPipeline] === GENERATING COMPONENT:', componentName, '===');
+    const filePath = path.join(componentsDir, `${sanitizeGenericComponentName(componentName)}.astro`);
+    console.log('🌸 [GenericPipeline] File path:', filePath);
+    
+    // === COMMENTED OUT DOMAIN SECURITY FOR SPEED ===
+    // console.log('🌸 [GenericPipeline] Injecting domain security context...');
+    // const domainSecurityContext = await DomainSecurityService.injectIntoSystemPrompt(GENERIC_CODEGEN_SYSTEM_PROMPT);
+    // console.log('🌸 [GenericPipeline] System prompt length:', domainSecurityContext.length);
+    
+    console.log('🌸 [GenericPipeline] Sending request to Codestral...');
+    const response = await mistralClient.chat.complete({
+      model: 'codestral-latest',
+      messages: [
+        {
+          role: 'system',
+          content: GENERIC_CODEGEN_SYSTEM_PROMPT // Using base prompt without domain security for speed
+        },
+        {
+          role: 'user',
+          content: `Generate a single ${componentName} component for a real estate landing page. The component should be atomic (contain only one section) and follow Astro + Tailwind CSS best practices. Include proper TypeScript types and ensure the component is self-contained.`
+        }
+      ],
+      temperature: 0.7,
+    });
+    
+    console.log('🌸 [GenericPipeline] Codestral response received');
+    console.log('🌸 [GenericPipeline] Response length:', response.choices[0]?.message?.content?.length || 0);
+    
+    let generatedCode = response.choices[0]?.message?.content || '';
+    console.log('🌸 [GenericPipeline] Raw generated code length:', generatedCode.length);
+    
+    // Handle case where content might be an array
+    if (Array.isArray(generatedCode)) {
+      generatedCode = generatedCode.join('');
+    }
+    
+    // Extract code from markdown if present
+    const codeMatch = (generatedCode as string).match(/```(?:astro|html)?\s*\n([\s\S]*?)\n```/);
+    if (codeMatch) {
+      generatedCode = codeMatch[1];
+      console.log('🌸 [GenericPipeline] Extracted code from markdown, length:', generatedCode.length);
+    }
+    
+    // Clean up the code
+    generatedCode = (generatedCode as string).trim();
+    console.log('🌸 [GenericPipeline] Cleaned code length:', generatedCode.length);
+    
+    // === THEME-AWARE IMAGE REPLACEMENT WITH CACHED THEME ===
+    console.log('🌸 [GenericPipeline] Getting theme-aware mockup path...');
+    const mockupPath = await enhancedImageService.getMockupImage(undefined, prompt);
+    console.log('🌸 [GenericPipeline] Mockup path:', mockupPath);
+    
+    console.log('🌸 [GenericPipeline] Replacing placeholders...');
+    let cleanedCode = (generatedCode as string)
+      .replace(/{{MOCKUP_IMAGE}}/g, mockupPath)
+      .replace(/{{AVATAR_IMAGE}}/g, await enhancedImageService.getAvatarImage(prompt));
+    console.log('🌸 [GenericPipeline] Placeholders replaced, code length:', cleanedCode.length);
+    
+    // === DIRECT SAVE WITHOUT VALIDATION ===
+    console.log('🌸 [GenericPipeline] Saving component to:', filePath);
+    await fs.writeFile(filePath, cleanedCode, 'utf8');
+    console.log('🌸 [GenericPipeline] ✅ Component saved successfully');
+    console.log('🌸 [GenericPipeline] === COMPONENT GENERATION COMPLETE ===');
+    
+    generatedComponents.push(filePath);
+  }
+  
+  // Update index.astro with all components
+  console.log('🌸 [GenericPipeline] Updating index.astro with all components...');
+  await updateGenericIndexAstroWithSections(componentNames);
+  console.log('🌸 [GenericPipeline] ✅ Index.astro updated');
+  
+  console.log('🌸 [GenericPipeline] === GENERIC CREATE PIPELINE COMPLETE ===');
+  console.log('🌸 [GenericPipeline] Generated components:', generatedComponents);
+  
+  return { success: true, componentPaths: generatedComponents };
+}
+
+    // Simple validation - check for external domains and non-atomic components
+    console.log('🌸 [GenericPipeline] Validating generated code...');
+    const hasExternalDomains = /https:\/\/[^"]*\.(jpg|jpeg|png|webp|gif|svg)/.test(cleanedCode) && 
+                              !cleanedCode.includes('freepik.com') && 
+                              !cleanedCode.includes('api.freepik.com');
+    
+    const hasMultipleSections = cleanedCode.includes('id="partners"') || 
+                                cleanedCode.includes('id="benefits"') || 
+                                cleanedCode.includes('id="features"') || 
+                                cleanedCode.includes('id="testimonials"') || 
+                                cleanedCode.includes('id="faq"') ||
+                                cleanedCode.includes('id="newsletter"');
+
+    console.log('🌸 [GenericPipeline] Has external domains:', hasExternalDomains);
+    console.log('🌸 [GenericPipeline] Has multiple sections:', hasMultipleSections);
+
+    let finalCode = cleanedCode;
+    let regenerationCount = 0;
+    const maxRegenerations = 2; // Reduced from 3 to 2
+
+    while ((hasExternalDomains || hasMultipleSections) && regenerationCount < maxRegenerations) {
+      regenerationCount++;
+      console.log('🌸 [GenericPipeline] === REGENERATION', regenerationCount, '===');
+      
+      if (hasExternalDomains) {
+        console.log('🌸 [GenericPipeline] ❌ External domains detected, regenerating...');
+      }
+      if (hasMultipleSections) {
+        console.log('🌸 [GenericPipeline] ❌ Non-atomic component detected, regenerating...');
+      }
+
+      // Add delay between regenerations to prevent rate limiting
+      if (regenerationCount > 1) {
+        console.log('🌸 [GenericPipeline] Waiting 2 seconds before next regeneration...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+
+      // Create stronger prompt for regeneration
+      const strongerPrompt = `CRITICAL: You MUST follow these rules EXACTLY:
+
+1. ATOMIC COMPONENT ONLY: Create ONLY the ${componentName} section. Do NOT include any other sections.
+2. Use ONLY Freepik API for images. NEVER use any external domains.
+3. Use ONLY Lucide icons from @lucide/astro library.
+4. NEVER create full pages with multiple sections.`;
+
+      console.log('🌸 [GenericPipeline] Using stronger prompt for regeneration');
+      
+      try {
+        const regenerationResponse = await new Mistral({ apiKey: process.env.MISTRAL_API_KEY! }).chat.complete({
+        model: 'codestral-latest',
+        messages: [
+          { role: 'system', content: await DomainSecurityService.injectIntoSystemPrompt(GENERIC_CODEGEN_SYSTEM_PROMPT) },
+          { role: 'user', content: strongerPrompt }
+        ],
+        temperature: 0.1,
+      });
+      
+        console.log('🌸 [GenericPipeline] Regeneration response received');
+        let regeneratedCode = regenerationResponse.choices[0]?.message?.content || '';
+        
+        // Handle case where content might be an array
+        if (Array.isArray(regeneratedCode)) {
+          regeneratedCode = regeneratedCode.join('');
+        }
+        
+        // Extract code from markdown blocks
+        const regeneratedCodeMatch = regeneratedCode.match(/```(?:astro)?\s*([\s\S]*?)```/);
+        if (regeneratedCodeMatch) {
+          regeneratedCode = regeneratedCodeMatch[1];
+        }
+
+        let regeneratedCleanedCode = regeneratedCode.replace(/```(astro)?/g, '').trim();
+        
+        // Apply the same simple replacements to regenerated code
+      regeneratedCleanedCode = regeneratedCleanedCode.replace(/"([\/]?path[\/]to[\/]?[^\"]+)"/g, `"${mockupPath}"`);
+        regeneratedCleanedCode = regeneratedCleanedCode.replace(/"path\/to\/avatar"/g, `"${await enhancedImageService.getAvatarImage(prompt)}"`);
+        
+        // Replace image paths with Freepik images in regenerated code
+        const regeneratedImageMatches = regeneratedCleanedCode.match(imagePathRegex) || [];
+        for (const match of regeneratedImageMatches) {
+          const imagePath = match.replace(/"/g, '');
+          console.log('🌸 [GenericPipeline] Found regenerated image path to replace:', imagePath);
+          const freepikImage = await enhancedImageService.getImageFromDescription(imagePath, prompt);
+          console.log('🌸 [GenericPipeline] Replacing regenerated with Freepik image:', freepikImage);
+          regeneratedCleanedCode = regeneratedCleanedCode.replace(match, `"${freepikImage}"`);
+        }
+        
+        // Also replace hardcoded image variables in regenerated code
+        const regeneratedVariableMatches = regeneratedCleanedCode.match(imageVariableRegex) || [];
+        for (const match of regeneratedVariableMatches) {
+          const fullMatch = match;
+          const imagePath = match.replace(/.*"([^"]*\/images\/[^"]*\.(jpg|jpeg|png|webp|gif|svg))".*/, '$1');
+          console.log('🌸 [GenericPipeline] Found regenerated image variable to replace:', imagePath);
+          const freepikImage = await enhancedImageService.getImageFromDescription(imagePath, prompt);
+          console.log('🌸 [GenericPipeline] Replacing regenerated variable with Freepik image:', freepikImage);
+          regeneratedCleanedCode = regeneratedCleanedCode.replace(fullMatch, fullMatch.replace(`"${imagePath}"`, `"${freepikImage}"`));
+        }
+        
+      regeneratedCleanedCode = regeneratedCleanedCode.replace(/\skey=\{[^}]+\}/g, '');
+        regeneratedCleanedCode = regeneratedCleanedCode.replace(/<input([^>]*?)type=\{([^}]+)\}([^>]*)>/g, (match: string, before: string, typeExpr: string, after: string) => {
+          return `<input${before}type="${typeExpr}"${after}>`;
+        });
+
+        console.log('🌸 [GenericPipeline] Regenerated code length:', regeneratedCleanedCode.length, 'characters');
+
+        // Check if regeneration fixed the issues
+        const regeneratedHasExternalDomains = /https:\/\/[^"]*\.(jpg|jpeg|png|webp|gif|svg)/.test(regeneratedCleanedCode) && 
+                                             !regeneratedCleanedCode.includes('freepik.com') && 
+                                             !regeneratedCleanedCode.includes('api.freepik.com');
+        
+        const regeneratedHasMultipleSections = regeneratedCleanedCode.includes('id="partners"') || 
+                                              regeneratedCleanedCode.includes('id="benefits"') || 
+                                              regeneratedCleanedCode.includes('id="features"') || 
+                                              regeneratedCleanedCode.includes('id="testimonials"') || 
+                                              regeneratedCleanedCode.includes('id="faq"') ||
+                                              regeneratedCleanedCode.includes('id="newsletter"');
+
+        console.log('🌸 [GenericPipeline] Regenerated - Has external domains:', regeneratedHasExternalDomains);
+        console.log('🌸 [GenericPipeline] Regenerated - Has multiple sections:', regeneratedHasMultipleSections);
+
+        if (!regeneratedHasExternalDomains && !regeneratedHasMultipleSections) {
+          console.log('🌸 [GenericPipeline] ✅ Regeneration successful!');
+          finalCode = regeneratedCleanedCode;
+          break;
+    } else {
+          console.log('🌸 [GenericPipeline] ❌ Regeneration still has issues');
+          finalCode = regeneratedCleanedCode;
+        }
+      } catch (error) {
+        console.error('🌸 [GenericPipeline] ❌ Regeneration failed:', error);
+        console.log('🌸 [GenericPipeline] Using original code due to regeneration failure');
+        break;
+      }
+    }
+
+    // Save the component
+    console.log('🌸 [GenericPipeline] Saving component to:', filePath);
+    await fs.writeFile(filePath, finalCode);
+    console.log('🌸 [GenericPipeline] ✅ Component saved successfully');
+    
+    componentPaths.push(filePath);
+    console.log('🌸 [GenericPipeline] === COMPONENT GENERATION COMPLETE ===');
+  }
+
+  // Update index.astro with all generated components
+  console.log('🌸 [GenericPipeline] Updating index.astro with all components...');
+  await updateGenericIndexAstroWithSections(componentNames);
+  console.log('🌸 [GenericPipeline] ✅ Index.astro updated');
+
+  console.log('🌸 [GenericPipeline] === GENERIC CREATE PIPELINE COMPLETE ===');
+  console.log('🌸 [GenericPipeline] Generated components:', componentPaths);
+  
+  return { success: true, componentPaths };
+}
+
+// === SINGLE PIPELINE DEDICATED FUNCTIONS ===
+// Single pipeline dedicated directory functions (completely independent)
+function getSingleComponentsDir(subpath: string = ''): string {
+  // Single pipeline uses its own directory logic - goes up one level from /interface to project root
+  const singleProjectRoot = path.resolve(process.cwd(), '..');
+  return path.join(singleProjectRoot, 'rendering', 'src', 'components', subpath);
+}
+
+function getSinglePagesDir(subpath: string = ''): string {
+  // Single pipeline uses its own directory logic - goes up one level from /interface to project root
+  const singleProjectRoot = path.resolve(process.cwd(), '..');
+  return path.join(singleProjectRoot, 'rendering', 'src', 'pages', subpath);
+}
+
+// Single pipeline dedicated function to sanitize component names for safe file names
+function sanitizeSingleComponentName(componentName: string): string {
+  return componentName
+    .replace(/\s+/g, '') // Remove all spaces first
+    .replace(/[^a-zA-Z0-9]/g, '') // Remove all non-alphanumeric characters
+    .replace(/^([a-z])/, (match) => match.toUpperCase()) // Capitalize first letter
+    .replace(/^([A-Z])/, (match) => match) // Keep first letter capitalized
+    || 'Component'; // Fallback if empty
+}
+
+// Single pipeline dedicated mockup image path function
+async function getSingleMockupImagePath(): Promise<string> {
+  // Single pipeline uses enhanced image service with Freepik integration
+  const { enhancedImageService } = await import('../services/image-service');
+  return await enhancedImageService.getMockupImage();
+}
+
+// Single pipeline dedicated index.astro update function
+async function updateSingleIndexAstroComponent(componentName: string, prompt?: string) {
+  const pagesDir = getSinglePagesDir(); // Use Single-specific directory function
+  const indexPath = path.join(pagesDir, 'index.astro');
+  let content = await fs.readFile(indexPath, 'utf-8');
+  const sanitizedName = sanitizeSingleComponentName(componentName);
+  const pascalName = sanitizedName.charAt(0).toUpperCase() + sanitizedName.slice(1);
+  
+  // Remove previous import and SectionWrapper for this component
+  const importRegex = new RegExp(`import ${pascalName} from ['"].*${pascalName}\.astro['"];?\n?`, 'g');
+  content = content.replace(importRegex, '');
+  const sectionRegex = new RegExp(`<SectionWrapper id=["']${componentName.toLowerCase()}["'][^>]*>[\s\S]*?<${pascalName}\s*\/>[\s\S]*?<\/SectionWrapper>`, 'g');
+  content = content.replace(sectionRegex, '');
+  
+  // Add import after the last import
+  const lastImportIndex = content.lastIndexOf('import');
+  const endOfLastImport = content.indexOf('\n', lastImportIndex);
+  const importStatement = `import ${pascalName} from '../components/${pascalName}.astro';\n`;
+  content = content.slice(0, endOfLastImport + 1) + importStatement + content.slice(endOfLastImport + 1);
+  
+  // Build SectionWrapper
+  const sectionId = componentName.toLowerCase().replace(/\s+/g, '-');
+  const componentTag = `\n    <SectionWrapper id=\"${sectionId}\">\n      <${pascalName} />\n    </SectionWrapper>\n`;
+  
+  // Placement logic: underneath the menu if prompt requests it
+  let inserted = false;
+  if (prompt && /underneath the menu/i.test(prompt)) {
+    // Find the Menu SectionWrapper and insert after it
+    const menuSectionRegex = /(<SectionWrapper id=\"menu\">[\s\S]*?<Menu \/>[\s\S]*?<\/SectionWrapper>)/i;
+    const match = content.match(menuSectionRegex);
+    if (match) {
+      content = content.replace(menuSectionRegex, `$1${componentTag}`);
+      inserted = true;
+      console.log('[updateSingleIndexAstroComponent] Inserted Hero section underneath the menu.');
+    }
+  }
+  
+  // Fallback: insert before </main> if not already inserted
+  if (!inserted && content.includes('</main>')) {
+    content = content.replace('</main>', `${componentTag}\n</main>`);
+    console.log('[updateSingleIndexAstroComponent] Inserted section before </main> as fallback.');
+  }
+  
+  await fs.writeFile(indexPath, content);
+  console.log(`[updateSingleIndexAstroComponent] Successfully updated index.astro with ${componentName}`);
+}
+
+// === ABSTRACT PIPELINE DEDICATED FUNCTIONS ===
+// Abstract pipeline dedicated directory functions (completely independent)
+function getAbstractComponentsDir(subpath: string = ''): string {
+  // Abstract pipeline uses its own directory logic - goes up one level from /interface to project root
+  const abstractProjectRoot = path.resolve(process.cwd(), '..');
+  return path.join(abstractProjectRoot, 'rendering', 'src', 'components', subpath);
+}
+
+function getAbstractPagesDir(subpath: string = ''): string {
+  // Abstract pipeline uses its own directory logic - goes up one level from /interface to project root
+  const abstractProjectRoot = path.resolve(process.cwd(), '..');
+  return path.join(abstractProjectRoot, 'rendering', 'src', 'pages', subpath);
+}
+
+// Abstract pipeline dedicated function to sanitize component names for safe file names
+function sanitizeAbstractComponentName(componentName: string): string {
+  return componentName
+    .replace(/\s+/g, '') // Remove all spaces first
+    .replace(/[^a-zA-Z0-9]/g, '') // Remove all non-alphanumeric characters
+    .replace(/^([a-z])/, (match) => match.toUpperCase()) // Capitalize first letter
+    .replace(/^([A-Z])/, (match) => match) // Keep first letter capitalized
+    || 'Component'; // Fallback if empty
+}
+
+// Abstract pipeline dedicated mockup image path function
+async function getAbstractMockupImagePath(): Promise<string> {
+  // Abstract pipeline uses enhanced image service with Freepik integration
+  const { enhancedImageService } = await import('../services/image-service');
+  return await enhancedImageService.getMockupImage();
+}
+
+// Abstract pipeline dedicated index.astro update function
+async function updateAbstractIndexAstroWithSections(componentNames: string[]) {
+  const pagesDir = getAbstractPagesDir(); // Use Abstract-specific directory function
+  const indexPath = path.join(pagesDir, 'index.astro');
+  let content = await fs.readFile(indexPath, 'utf-8');
+
+  // Helper function to convert to PascalCase consistently
+  const toPascalCase = (name: string): string => {
+    return name
+      .replace(/[^a-zA-Z0-9]+/g, ' ') // Replace non-alphanumeric with space
+      .split(' ')
+      .filter(Boolean)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join('');
+  };
+
+  // Remove all previous imports and SectionWrappers for these components
+  for (const componentName of componentNames) {
+    const sanitizedName = sanitizeAbstractComponentName(componentName);
+    const pascalName = toPascalCase(sanitizedName.replace('.astro', ''));
+    const importRegex = new RegExp(`import ${pascalName} from ['"].*${pascalName}\.astro['"];?\n?`, 'g');
+    content = content.replace(importRegex, '');
+  }
+
+  // Remove ALL existing SectionWrapper blocks to prevent duplicates
+  content = content.replace(/<SectionWrapper[^>]*>[\s\S]*?<\/SectionWrapper>\s*/g, '');
+
+  // Add imports for all components after the last import, avoiding duplicates
+  const lastImportIndex = content.lastIndexOf('import');
+  const endOfLastImport = content.indexOf('\n', lastImportIndex);
+  let importBlock = '';
+  const addedImports = new Set<string>(); // Track added imports to avoid duplicates
+  
+  for (const componentName of componentNames) {
+    const sanitizedName = sanitizeAbstractComponentName(componentName);
+    const pascalName = toPascalCase(sanitizedName.replace('.astro', ''));
+    
+    // Only add import if not already present
+    if (!addedImports.has(pascalName) && !content.includes(`import ${pascalName} from`)) {
+      importBlock += `import ${pascalName} from '../components/${pascalName}.astro';\n`;
+      addedImports.add(pascalName);
+    }
+  }
+  
+  content = content.slice(0, endOfLastImport + 1) + importBlock + content.slice(endOfLastImport + 1);
+
+  // Add SectionWrappers for all components in order, before </main> or </body>
+  let sectionBlock = '';
+  for (const componentName of componentNames) {
+    const sanitizedName = sanitizeAbstractComponentName(componentName);
+    const pascalName = toPascalCase(sanitizedName.replace('.astro', ''));
+    // Use original component name for section ID (lowercase, replace spaces with hyphens)
+    const sectionId = componentName.toLowerCase().replace(/\s+/g, '-');
+    sectionBlock += `\n    <SectionWrapper id="${sectionId}">\n      <${pascalName} />\n    </SectionWrapper>\n`;
+  }
+  if (content.includes('</main>')) {
+    content = content.replace('</main>', `${sectionBlock}\n</main>`);
+  } else {
+    content = content.replace('</body>', `${sectionBlock}\n</body>`);
+  }
+
+  await fs.writeFile(indexPath, content);
+  console.log(`[TRACE][Abstract] Updated index.astro to include all generated sections.`);
+}
+
+// === ENHANCED GENERIC CREATE PIPELINE WITH THEME CACHING ===
+async function runGenericCreatePipeline({ componentNames, prompt }: CreateGenericInstructions): Promise<{ success: boolean; componentPaths: string[] }> {
+  console.log('🌸 [GenericPipeline] === STARTING GENERIC CREATE PIPELINE ===');
+  console.log('🌸 [GenericPipeline] Component names:', componentNames);
+  console.log('🌸 [GenericPipeline] Prompt:', prompt);
+  
+  const componentsDir = getGenericComponentsDir();
+  console.log('🌸 [GenericPipeline] Components directory:', componentsDir);
+  
+  // === THEME CACHING - EXTRACT ONCE, USE EVERYWHERE ===
+  console.log('🌸 [GenericPipeline] Extracting theme once for all components...');
+  const theme = enhancedImageService.extractThemeFromPrompt(prompt);
+  console.log('🌸 [GenericPipeline] Theme detected once:', theme);
+  
+  const generatedComponents: string[] = [];
+  
+  for (const componentName of componentNames) {
+    console.log('🌸 [GenericPipeline] === GENERATING COMPONENT:', componentName, '===');
+    const filePath = path.join(componentsDir, `${componentName}.astro`);
+    console.log('🌸 [GenericPipeline] File path:', filePath);
+    
+    // === COMMENTED OUT DOMAIN SECURITY FOR SPEED ===
+    // console.log('🌸 [GenericPipeline] Injecting domain security context...');
+    // const domainSecurityContext = await DomainSecurityService.injectIntoSystemPrompt(GENERIC_CODEGEN_SYSTEM_PROMPT);
+    // console.log('🌸 [GenericPipeline] System prompt length:', domainSecurityContext.length);
+    
+    console.log('🌸 [GenericPipeline] Sending request to Codestral...');
+    const response = await mistralClient.chat.complete({
+      model: 'codestral-latest',
+      messages: [
+        {
+          role: 'system',
+          content: GENERIC_CODEGEN_SYSTEM_PROMPT // Using base prompt without domain security for speed
+        },
+        {
+          role: 'user',
+          content: `Generate a single ${componentName} component for a real estate landing page. The component should be atomic (contain only one section) and follow Astro + Tailwind CSS best practices. Include proper TypeScript types and ensure the component is self-contained.`
+        }
+      ],
+      temperature: 0.7,
+    });
+    
+    console.log('🌸 [GenericPipeline] Codestral response received');
+    console.log('🌸 [GenericPipeline] Response length:', response.choices[0]?.message?.content?.length || 0);
+    
+    let generatedCode = response.choices[0]?.message?.content || '';
+    console.log('🌸 [GenericPipeline] Raw generated code length:', generatedCode.length);
+    
+    // Handle case where content might be an array
+    if (Array.isArray(generatedCode)) {
+      generatedCode = generatedCode.join('');
+    }
+    
+    // Extract code from markdown if present
+    const codeMatch = (generatedCode as string).match(/```(?:astro|html)?\s*\n([\s\S]*?)\n```/);
+    if (codeMatch) {
+      generatedCode = codeMatch[1];
+      console.log('🌸 [GenericPipeline] Extracted code from markdown, length:', generatedCode.length);
+    }
+    
+    // Clean up the code
+    generatedCode = (generatedCode as string).trim();
+    console.log('🌸 [GenericPipeline] Cleaned code length:', generatedCode.length);
+    
+    // === THEME-AWARE IMAGE REPLACEMENT WITH CACHED THEME ===
+    console.log('🌸 [GenericPipeline] Getting theme-aware mockup path...');
+    const mockupPath = await enhancedImageService.getMockupImage(undefined, prompt);
+    console.log('🌸 [GenericPipeline] Mockup path:', mockupPath);
+    
+    console.log('🌸 [GenericPipeline] Replacing placeholders...');
+    let cleanedCode = (generatedCode as string)
+      .replace(/{{MOCKUP_IMAGE}}/g, mockupPath)
+      .replace(/{{AVATAR_IMAGE}}/g, await enhancedImageService.getAvatarImage(prompt));
+    console.log('🌸 [GenericPipeline] Placeholders replaced, code length:', cleanedCode.length);
+    
+    // === DIRECT SAVE WITHOUT VALIDATION ===
+    console.log('🌸 [GenericPipeline] Saving component to:', filePath);
+    await fs.writeFile(filePath, cleanedCode, 'utf8');
+    console.log('🌸 [GenericPipeline] ✅ Component saved successfully');
+    console.log('🌸 [GenericPipeline] === COMPONENT GENERATION COMPLETE ===');
+    
+    generatedComponents.push(filePath);
+  }
+  
+  // Update index.astro with all components
+  console.log('🌸 [GenericPipeline] Updating index.astro with all components...');
+  await updateGenericIndexAstroWithSections(componentNames);
+  console.log('🌸 [GenericPipeline] ✅ Index.astro updated');
+  
+  console.log('🌸 [GenericPipeline] === GENERIC CREATE PIPELINE COMPLETE ===');
+  console.log('🌸 [GenericPipeline] Generated components:', generatedComponents);
+  
+  return { success: true, componentPaths: generatedComponents };
+}

@@ -1,0 +1,25 @@
+{
+  "total_requests": 12,
+  "successful_requests": 6,
+  "failed_requests": 6,
+  "average_processing_time": 877589488186.4166,
+  "common_errors": {
+    "other_error": 6
+  },
+  "intent_accuracy": {
+    "create_website": 0.5
+  },
+  "component_success_rates": {
+    "Hero": 0.5,
+    "Benefits": 0.5,
+    "Testimonials": 0.5,
+    "Features": 0.5,
+    "Reinforcement": 0.5,
+    "FAQ": 0.5,
+    "Contact": 0.5,
+    "Footer": 0.5,
+    "Menu": 0.5,
+    "Our Partners": 0.5,
+    "Newsletter": 0.5
+  }
+}

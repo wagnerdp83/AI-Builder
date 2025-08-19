@@ -1,0 +1,704 @@
+import { promises as fs } from 'fs';
+import path from 'path';
+import { Mistral } from '@mistralai/mistralai';
+import OpenAI from 'openai';
+import { pathToFileURL } from 'url';
+import { createContext, runInNewContext } from 'vm';
+
+const mistralApiKey = process.env.MISTRAL_API_KEY;
+const openaiApiKey = process.env.OPENAI_API_KEY;
+const mistralClient = new Mistral({ apiKey: mistralApiKey });
+const openaiClient = new OpenAI({ apiKey: openaiApiKey });
+
+export interface VisionCreatorInstructions {
+  componentName: string;
+  position: string;
+  imageUrl: string;
+}
+
+export interface VisionCreatorResult {
+  success: boolean;
+  filePath?: string;
+  error?: string;
+}
+
+interface DesignSystem {
+  colors: Record<string, string>;
+  spacing: string[];
+  typography: string[];
+  shadows: string[];
+  borderRadius: string[];
+  designPatterns: {
+    buttons: string[];
+    textHierarchy: string[];
+    layouts: string[];
+    products: {
+      colorPicker: string;
+      sizeSelector: string;
+      selectedSize: string;
+      selectedColor: string;
+      productImage: string;
+      productTitle: string;
+      productPrice: string;
+      productDescription: string;
+      addToCartButton: string;
+      reviews: {
+        container: string;
+        stars: string;
+        count: string;
+      };
+    };
+  };
+}
+
+async function extractDesignSystem(): Promise<DesignSystem> {
+  console.log('🎨 Dynamically extracting design system from project configuration...');
+  
+  try {
+    // Use a more robust way to load the Tailwind config
+    const tailwindConfigPath = path.join(process.cwd(), '..', 'rendering', 'tailwind.config.js');
+    console.log('Looking for Tailwind config at:', tailwindConfigPath);
+    
+    let tailwindConfig;
+    try {
+      // First try reading as a file
+      const configContent = await fs.readFile(tailwindConfigPath, 'utf-8');
+      
+      // Create a sandbox context
+      const sandbox = {
+        module: { exports: {} },
+        exports: {},
+        require: () => ({}),
+        console: console
+      };
+      
+      // Run the config in the sandbox
+      runInNewContext(configContent, sandbox);
+      
+      // Get the config from either exports.default (ES modules) or module.exports (CommonJS)
+      tailwindConfig = sandbox.exports.default || sandbox.module.exports;
+      
+      if (!tailwindConfig || !tailwindConfig.theme) {
+        throw new Error('Invalid Tailwind config format');
+      }
+    } catch (configError) {
+      console.warn('Could not load Tailwind config directly, using fallback values:', configError);
+      // Fallback to hardcoded default theme values that match the project
+      tailwindConfig = {
+        theme: {
+          extend: {
+            colors: {
+              first: '#383877',    // Main first color
+              second: '#ea580c',   // Main second color
+              third: '#1f2937',    // Optional third color
+            },
+            fontSize: {
+              'display-2xl': ['4.5rem', { lineHeight: '1.1' }],
+              'display-xl': ['3.75rem', { lineHeight: '1.1' }],
+              'display-lg': ['3rem', { lineHeight: '1.1' }],
+              'display-md': ['2.25rem', { lineHeight: '1.2' }],
+              'display-sm': ['1.875rem', { lineHeight: '1.2' }],
+            },
+            boxShadow: {
+              'soft-xl': '0 20px 27px rgba(0, 0, 0, 0.05)',
+              'soft-lg': '0 10px 15px rgba(0, 0, 0, 0.05)',
+              'soft-md': '0 4px 7px rgba(0, 0, 0, 0.05)',
+              'soft-sm': '0 2px 4px rgba(0, 0, 0, 0.05)',
+            }
+          }
+        }
+      };
+    }
+    
+    // Read existing components to analyze usage patterns
+    const componentsDir = path.join(process.cwd(), '..', 'rendering', 'src', 'components');
+    const componentFiles = await fs.readdir(componentsDir);
+    const componentSamples: string[] = [];
+    
+    for (const file of componentFiles) {
+      if (file.endsWith('.astro')) {
+        try {
+          const content = await fs.readFile(path.join(componentsDir, file), 'utf-8');
+          componentSamples.push(content);
+        } catch (e) { /* Skip if can't read */ }
+      }
+    }
+    
+    const designSystem = analyzeDesignSystem(tailwindConfig, componentSamples);
+    console.log('✅ Design system extracted successfully.');
+    return designSystem;
+    
+  } catch (error) {
+    console.error('❌ CRITICAL: Could not extract design system. Generation may be inaccurate.', error);
+    // Return a minimal system with the project's known theme colors
+    return {
+      colors: {
+        first: '#383877',
+        second: '#ea580c',
+        third: '#1f2937'
+      },
+      spacing: ['px', '0', '1', '2', '4', '8', '12', '16', '20', '24', '32', '40', '48', '64'],
+      typography: ['text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl', 'text-3xl'],
+      shadows: ['shadow-sm', 'shadow', 'shadow-md', 'shadow-lg', 'shadow-xl'],
+      borderRadius: ['rounded-none', 'rounded-sm', 'rounded', 'rounded-md', 'rounded-lg', 'rounded-full'],
+      designPatterns: {
+        buttons: ['bg-first hover:bg-first/90', 'bg-second hover:bg-second/90'],
+        textHierarchy: ['text-xl font-bold', 'text-lg font-semibold', 'text-base'],
+        layouts: ['grid grid-cols-1 md:grid-cols-2', 'flex flex-col md:flex-row'],
+        products: {
+          colorPicker: 'w-6 h-6 rounded-full cursor-pointer border border-gray-200',
+          sizeSelector: 'w-full p-2 border text-center rounded-md hover:border-first focus:outline-none focus:border-first',
+          selectedSize: 'border-first bg-first/5',
+          selectedColor: 'ring-2 ring-first ring-offset-2',
+          productImage: 'w-full rounded-lg object-cover',
+          productTitle: 'text-xl font-bold mb-4',
+          productPrice: 'text-2xl font-bold mb-4',
+          productDescription: 'text-base text-gray-600 mb-4',
+          addToCartButton: 'bg-first hover:bg-first/90 text-white p-3 w-full text-center rounded-md text-lg transition-colors',
+          reviews: {
+            container: 'flex items-center mb-4',
+            stars: 'text-first mr-2',
+            count: 'text-first underline text-sm hover:text-first/80'
+          }
+        }
+      }
+    };
+  }
+}
+
+function analyzeDesignSystem(tailwindConfig: any, componentSamples: string[]): DesignSystem {
+  const theme = tailwindConfig.theme?.extend || tailwindConfig.theme || {};
+  
+  // 1. Extract raw tokens from Tailwind config
+  const colors = theme.colors || {};
+  const flatColors: Record<string, string> = {};
+  Object.keys(colors).forEach(key => {
+    if (typeof colors[key] === 'string') {
+      flatColors[key] = colors[key];
+    } else if (typeof colors[key] === 'object') {
+      // Handle nested color objects (like blue.500, etc)
+      Object.entries(colors[key]).forEach(([shade, value]) => {
+        flatColors[`${key}-${shade}`] = value as string;
+      });
+    }
+  });
+
+  const typography = Object.keys(theme.fontSize || {});
+  const shadows = Object.keys(theme.boxShadow || {});
+  const borderRadius = Object.keys(theme.borderRadius || {});
+  
+  // 2. Analyze component samples to find patterns
+  const allClassStrings = componentSamples.join(' ');
+
+  // Enhanced pattern extraction for product layouts
+  const buttonPatterns = extractPattern(allClassStrings, /class="[^"]*(bg-first|bg-second|border)[^"]*"/g);
+  const textHierarchyPatterns = extractPattern(allClassStrings, /class="[^"]*(text-display|text-xl|text-2xl|text-3xl|text-4xl|text-5xl|text-6xl)[^"]*"/g);
+  const layoutPatterns = extractPattern(allClassStrings, /class="[^"]*(grid|flex|max-w-\[)[^"]*"/g);
+  const spacingPatterns = extractPattern(allClassStrings, /\b(p[xy]?-\d+|m[xy]?-\d+|gap-\d+|space-y-\d+)\b/g);
+
+  // Add product-specific patterns
+  const productPatterns = {
+    colorPicker: 'w-6 h-6 rounded-full cursor-pointer border border-gray-200',
+    sizeSelector: 'w-full p-2 border text-center rounded-md hover:border-first focus:outline-none focus:border-first',
+    selectedSize: 'border-first bg-first/5',
+    selectedColor: 'ring-2 ring-first ring-offset-2',
+    productImage: 'w-full rounded-lg object-cover',
+    productTitle: 'text-xl font-bold mb-4',
+    productPrice: 'text-2xl font-bold mb-4',
+    productDescription: 'text-base text-gray-600 mb-4',
+    addToCartButton: 'bg-first hover:bg-first/90 text-white p-3 w-full text-center rounded-md text-lg transition-colors',
+    reviews: {
+      container: 'flex items-center mb-4',
+      stars: 'text-first mr-2',
+      count: 'text-first underline text-sm hover:text-first/80'
+    }
+  };
+
+  return {
+    colors: flatColors,
+    spacing: spacingPatterns,
+    typography,
+    shadows,
+    borderRadius,
+    designPatterns: {
+      buttons: buttonPatterns,
+      textHierarchy: textHierarchyPatterns,
+      layouts: layoutPatterns,
+      products: productPatterns
+    }
+  };
+}
+
+function extractPattern(text: string, regex: RegExp): string[] {
+  const matches = text.match(regex) || [];
+  const cleanedMatches = matches.map(match => match.replace(/class="([^"]*)"/, '$1'));
+  return [...new Set(cleanedMatches)]; // Remove duplicates
+}
+
+function toPascalCase(str: string): string {
+  return str
+    .replace('.astro', '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join('');
+}
+
+function toSpacedFormat(str: string): string {
+    return str.replace('.astro', '').replace(/([A-Z])/g, ' $1').trim();
+}
+
+async function imageToJson(imageBase64: string): Promise<string> {
+    console.log("🧐 Stage 1: Kicking off GPT-4V Vision Specialist...");
+    
+    // Dynamically extract design system
+    const designSystem = await extractDesignSystem();
+    
+    const visionPrompt = `You are an expert UI/UX analyst AI. Your task is to analyze the provided image of a web layout and break it down into a structured JSON object. Do not write any code. Your sole output must be a single JSON object describing the UI components, their properties, and their hierarchy.
+
+⚠️ CRITICAL IMAGE DETECTION: You MUST identify and catalog every visual element in the image - photos, illustrations, avatars, icons, logos, product images, screenshots, thumbnails, etc. Do not miss any visual content!
+
+The JSON should have a root key "layout" which describes the overall page structure (e.g., "single-column", "two-column-sidebar-left").
+
+The main content should be an array of "components". Each component object must include:
+- "type": (e.g., "button", "input", "heading", "paragraph", "image", "card", "container").
+- "content": The text content of the element, if any. For images, describe what you see in detail.
+- "styles": An object containing CSS properties that MUST use this project's design system:
+  
+  **PROJECT COLOR PALETTE:**
+  ${Object.entries(designSystem.colors).map(([key, value]) => `- ${key}: "${value}"`).join('\n  ')}
+  
+  **COMMON SPACING PATTERNS:**
+  ${designSystem.spacing.join(', ')}
+  
+  **TYPOGRAPHY PATTERNS:**
+  ${designSystem.typography.join(', ')}
+  
+  **SHADOW PATTERNS:**
+  ${designSystem.shadows.join(', ')}
+  
+  **BORDER RADIUS PATTERNS:**
+  ${designSystem.borderRadius.join(', ')}
+  
+  **BUTTON PATTERNS:**
+  ${designSystem.designPatterns.buttons.join(', ')}
+  
+  **TEXT HIERARCHY PATTERNS:**
+  ${designSystem.designPatterns.textHierarchy.join(', ')}
+  
+  **LAYOUT PATTERNS:**  
+  ${designSystem.designPatterns.layouts.join(', ')}
+
+- "children": A nested array of component objects if this is a container element.
+
+🖼️ FOR IMAGES - THIS IS MANDATORY:
+When you detect ANY visual content (photos, illustrations, icons, etc.), you MUST:
+- Set type as "image"
+- In "content", provide a detailed description of what you see
+- Add an "imageType" field with one of these values:
+  * "avatar" - Profile photos, headshots, user images
+  * "product" - Product photos, items for sale
+  * "hero" - Large banner/hero images
+  * "thumbnail" - Small preview images
+  * "icon" - SVG icons, small graphics
+  * "logo" - Company/brand logos
+  * "screenshot" - App/website screenshots
+  * "illustration" - Drawings, graphics, artwork
+  * "photo" - General photography
+- Add a "dimensions" field describing the size (e.g., "small square", "large rectangle", "full width")
+- Use appropriate sizing and styling classes from the project patterns above
+
+Example image component:
+{
+  "type": "image",
+  "content": "Professional headshot of a smiling woman with blonde hair wearing a blue shirt",
+  "imageType": "avatar",
+  "dimensions": "small square",
+  "styles": {
+    "width": "w-12 h-12",
+    "borderRadius": "rounded-full",
+    "position": "object-cover"
+  }
+}
+
+Analyze colors, fonts, spacing, and layout (flexbox/grid properties) as accurately as possible. Be extremely detailed and ALWAYS use the project's design tokens listed above. Do NOT miss any images or visual elements!`;
+
+    const response = await openaiClient.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+            {
+                role: "user",
+                content: [
+                    {
+                        type: "text",
+                        text: visionPrompt
+                    },
+                    {
+                        type: "image_url",
+                        image_url: {
+                            url: `data:image/jpeg;base64,${imageBase64}`
+                        }
+                    }
+                ]
+            }
+        ],
+        max_tokens: 4000
+    });
+
+    let rawContent = response.choices[0].message.content;
+
+    if (!rawContent) {
+        throw new Error("GPT-4o returned an empty response");
+    }
+
+    // Extract the JSON part from the full response
+    const jsonMatch = rawContent.match(/```json\s*([\s\S]*?)\s*```/);
+    let jsonOutput;
+
+    if (jsonMatch && jsonMatch[1]) {
+        jsonOutput = jsonMatch[1];
+        console.log("✅ Extracted JSON from GPT-4o response.");
+    } else {
+        // Fallback if the model *only* returns JSON
+        try {
+            JSON.parse(rawContent);
+            jsonOutput = rawContent;
+            console.log("✅ Received raw JSON response from GPT-4o.");
+        } catch (e) {
+            console.error("❌ Failed to find or parse JSON in GPT-4o's response.");
+            throw new Error("Could not extract a valid JSON object from GPT-4o's response.");
+        }
+    }
+    
+    console.log("💻 GPT-4o Vision Specialist JSON output:", jsonOutput);
+    
+    console.log("✅ GPT-4o Vision Specialist finished. High-fidelity JSON blueprint created.");
+    return jsonOutput;
+}
+
+function generateImageUrl(imageType: string, description: string, dimensions: string): string {
+    // Curated list of high-quality Unsplash photos for each type
+    const imageMap = {
+        avatar: 'photo-1472099645785-5658abf4ff4e',  // Professional headshot
+        product: 'photo-1523275335684-37898b6baf30', // Clean product shot
+        hero: 'photo-1557804506-669a67965ba0',       // Wide landscape
+        background: 'photo-1557683316-973673baf926',  // Gradient background
+        thumbnail: 'photo-1505740420928-5e560c06d30e' // Product thumbnail
+    };
+
+    // Default dimensions based on type
+    const defaultSizes = {
+        avatar: { w: 400, h: 400 },
+        product: { w: 800, h: 600 },
+        hero: { w: 1600, h: 600 },
+        background: { w: 1920, h: 1080 },
+        thumbnail: { w: 300, h: 300 }
+    };
+
+    // Handle special cases
+    if (imageType === 'icon') {
+        return `https://via.placeholder.com/48x48/4F46E5/FFFFFF?text=🔧`;
+    }
+    if (imageType === 'logo') {
+        return `https://via.placeholder.com/120x60/1F2937/FFFFFF?text=LOGO`;
+    }
+
+    // Get photo ID and size
+    const photoId = imageMap[imageType as keyof typeof imageMap] || imageMap.product;
+    const size = defaultSizes[imageType as keyof typeof defaultSizes] || { w: 800, h: 600 };
+
+    // Build URL with optimized parameters
+    const baseUrl = `https://images.unsplash.com/${photoId}`;
+    const params = new URLSearchParams({
+        w: size.w.toString(),
+        h: size.h.toString(),
+        fit: 'crop',
+        q: '85',
+        fm: 'jpg',
+        auto: 'format,compress'
+    });
+
+    // Add type-specific parameters
+    if (imageType === 'avatar') params.append('crop', 'faces');
+    if (imageType === 'product') params.append('bg', 'white');
+
+    console.log(`🖼️ Generated ${imageType} image (${size.w}x${size.h}): ${baseUrl}?${params.toString()}`);
+    return `${baseUrl}?${params.toString()}`;
+}
+
+async function jsonToAstro(jsonString: string, componentName: string): Promise<string> {
+    console.log("✍️ Stage 2: Kicking off Mistral Codestral (JSON to Astro/Tailwind)...");
+    
+    // Get the same design system used in Stage 1
+    const designSystem = await extractDesignSystem();
+    
+    // Process the JSON to replace image placeholders with actual URLs
+    const processedJsonString = processImagesInJson(jsonString);
+    
+    const coderPrompt = `You are an expert front-end developer specializing in creating high-fidelity Astro components from a JSON specification. Your task is to convert the provided JSON object into a single, production-ready Astro component using Tailwind CSS that matches this project's design system.
+
+**Instructions:**
+-   **Strictly Adhere to the Blueprint**: Do not invent styles or structure. Your sole purpose is to translate the JSON blueprint into code.
+-   **Use Project Design System**: Convert the CSS properties in the \`styles\` objects into Tailwind CSS classes that match this project's design tokens:
+
+**PROJECT COLORS AVAILABLE:**
+${Object.entries(designSystem.colors).map(([key, value]) => `- bg-${key}, text-${key} (${value})`).join('\n')}
+
+**SPACING PATTERNS TO USE:**
+${designSystem.spacing.join(', ')}
+
+**TYPOGRAPHY PATTERNS TO USE:**
+${designSystem.typography.join(', ')}
+
+**SHADOW PATTERNS TO USE:**
+${designSystem.shadows.join(', ')}
+
+**BORDER RADIUS PATTERNS TO USE:**
+${designSystem.borderRadius.join(', ')}
+
+**PRODUCT-SPECIFIC PATTERNS TO USE:**
+${JSON.stringify(designSystem.designPatterns.products, null, 2)}
+
+**CRITICAL REQUIREMENTS FOR PRODUCT LAYOUTS:**
+1. Color picker must be interactive with proper states (selected, hover, focus)
+2. Size selector must be interactive with proper states
+3. Add to cart button must use the primary theme color (bg-first)
+4. Images must be properly sized and responsive
+5. Reviews section must use the theme color for stars and link
+6. All interactive elements must have proper hover/focus states
+7. Layout must be responsive and match the design exactly
+
+-   **Create a \`data\` Object**: All text content, image URLs, or list items from the JSON's \`content\` keys must be extracted into a single \`data\` object in the Astro component's frontmatter.
+-   **Self-Contained Component**: The final Astro component must be 100% self-contained and must not accept any props.
+-   **HTML Structure**: Use the \`type\` and nested \`children\` arrays from the JSON to build a semantic HTML structure.
+-   **Images**: For any image components in the JSON:
+    * Use the provided image URLs (they are already processed and ready to use)
+    * Apply the exact Tailwind classes specified in the styles
+    * Include proper alt text based on the content description
+    * Ensure responsive behavior with proper sizing classes
+
+**PROCESSED JSON Blueprint (with working image URLs):**
+\`\`\`json
+${processedJsonString}
+\`\`\`
+
+Now, generate the complete '${componentName}.astro' file using ONLY the design patterns and colors listed above. Make sure all images use the provided URLs and styling.`;
+
+    const payload = {
+        model: 'codestral-latest',
+        messages: [{ role: 'user' as const, content: coderPrompt }],
+    };
+
+    const response = await completeChatWithRetry(payload);
+    let astroCode = response.choices[0].message.content;
+
+    if (astroCode.includes('```astro')) {
+        astroCode = astroCode.split('```astro\n')[1].split('```')[0];
+    } else if (astroCode.startsWith('---')) {
+        // Already in correct format
+    } else if (astroCode.includes('---')) {
+        astroCode = '---\n' + astroCode.split('---').slice(1).join('---');
+    }
+
+    // Add client-side interactivity for product layouts
+    if (componentName.toLowerCase().includes('product')) {
+        astroCode = addProductInteractivity(astroCode);
+    }
+
+    console.log("✅ Mistral Codestral finished. High-fidelity component generated using project design system with proper image URLs.");
+    return astroCode;
+}
+
+function addProductInteractivity(astroCode: string): string {
+    // Add client-side script for color and size selection
+    const interactiveScript = `
+<script>
+  // Handle color selection
+  const colorInputs = document.querySelectorAll('input[name="color-choice"]');
+  colorInputs.forEach(input => {
+    input.addEventListener('change', (e) => {
+      // Remove selected state from all colors
+      colorInputs.forEach(inp => {
+        inp.parentElement?.classList.remove('ring-2', 'ring-first', 'ring-offset-2');
+      });
+      // Add selected state to chosen color
+      if (e.target.checked) {
+        e.target.parentElement?.classList.add('ring-2', 'ring-first', 'ring-offset-2');
+      }
+    });
+  });
+
+  // Handle size selection
+  const sizeButtons = document.querySelectorAll('.size-button');
+  sizeButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      // Remove selected state from all sizes
+      sizeButtons.forEach(btn => {
+        btn.classList.remove('border-first', 'bg-first/5');
+      });
+      // Add selected state to chosen size
+      button.classList.add('border-first', 'bg-first/5');
+    });
+  });
+</script>`;
+
+    // Insert the script before the closing </div> of the main component
+    return astroCode.replace('</div>', `${interactiveScript}\n</div>`);
+}
+
+function processImagesInJson(jsonString: string): string {
+    try {
+        const jsonData = JSON.parse(jsonString);
+        
+        // Recursively process components to replace image content with URLs
+        function processComponent(component: any): any {
+            if (component.type === 'image') {
+                const imageType = component.imageType || 'photo';
+                const dimensions = component.dimensions || 'medium rectangle';
+                const description = component.content || 'placeholder image';
+                
+                // Generate appropriate URL
+                const imageUrl = generateImageUrl(imageType, description, dimensions);
+                
+                // Update the component with the URL
+                component.imageUrl = imageUrl;
+                component.alt = description;
+                
+                console.log(`🖼️ Generated ${imageType} image: ${imageUrl}`);
+            }
+            
+            // Process children recursively
+            if (component.children && Array.isArray(component.children)) {
+                component.children = component.children.map(processComponent);
+            }
+            
+            return component;
+        }
+        
+        // Process all components
+        if (jsonData.components && Array.isArray(jsonData.components)) {
+            jsonData.components = jsonData.components.map(processComponent);
+        }
+        
+        return JSON.stringify(jsonData, null, 2);
+    } catch (error) {
+        console.warn('⚠️ Could not process images in JSON, using original:', error);
+        return jsonString;
+    }
+}
+
+async function completeChatWithRetry(payload: any, retries = 4, initialDelay = 2000): Promise<any> {
+    let delay = initialDelay;
+    for (let i = 0; i < retries; i++) {
+        try {
+            const response = await mistralClient.chat.complete(payload as any);
+            return response;
+        } catch (error: any) {
+            if (error.statusCode === 429 && i < retries - 1) {
+                console.warn(`⚠️ API rate limit exceeded. Retrying in ${delay / 1000}s... (Attempt ${i + 2}/${retries})`);
+                await new Promise(res => setTimeout(res, delay));
+                delay *= 2; 
+            } else {
+                if (error.statusCode === 429) {
+                  console.error(`❌ Final attempt failed after ${retries} retries due to rate limiting.`);
+                }
+                throw error;
+            }
+        }
+    }
+    throw new Error('Exhausted all retry attempts.');
+}
+
+export async function executeVisionCreator(instructions: VisionCreatorInstructions): Promise<VisionCreatorResult> {
+  console.log('\n=== Vision Creator Handler: GPT-4V + Mistral Codestral Pipeline ===');
+  console.log('Instructions:', instructions);
+
+  const { componentName, position, imageUrl } = instructions;
+
+  if (!componentName || !position || !imageUrl) {
+    return { success: false, error: 'componentName, position, and imageUrl are required.' };
+  }
+
+  try {
+    const imagePath = path.join(process.cwd(), '..', 'rendering', 'public', imageUrl);
+    const imageBuffer = await fs.readFile(imagePath);
+    const imageBase64 = imageBuffer.toString('base64');
+
+    // STAGE 1: GPT-4V Vision Analysis
+    const componentJson = await imageToJson(imageBase64);
+
+    // STAGE 2: Mistral Codestral Code Generation
+    const finalAstroCode = await jsonToAstro(componentJson, componentName);
+
+    const newComponentFileName = `${toPascalCase(componentName)}.astro`;
+    const newComponentPath = path.join(process.cwd(), '..', 'rendering', 'src', 'components', newComponentFileName);
+
+    await fs.writeFile(newComponentPath, finalAstroCode);
+    console.log(`✅ Created component: ${newComponentPath}`);
+
+    const indexPath = path.join(process.cwd(), '..', 'rendering', 'src', 'pages', 'index.astro');
+    let indexContent = await fs.readFile(indexPath, 'utf-8');
+
+    const pascalCaseName = toPascalCase(componentName);
+    const newImportStatement = `import ${pascalCaseName} from '../components/${newComponentFileName}';`;
+
+    if (!indexContent.includes(newImportStatement)) {
+        const parts = indexContent.split('---');
+        if (parts.length < 3) {
+            return { success: false, error: 'Could not parse frontmatter in index.astro' };
+        }
+        const frontmatterContent = parts[1].trim();
+        parts[1] = `\n${frontmatterContent}\n${newImportStatement}\n`;
+        indexContent = `---${parts[1]}---${parts.slice(2).join('---')}`;
+    }
+    
+    const sectionId = toSpacedFormat(componentName).toLowerCase().replace(/ /g, '-');
+    const newSectionHtml = `\n\n    <SectionWrapper id="${sectionId}" >
+      <${pascalCaseName} />
+    </SectionWrapper>`;
+    
+    const componentTag = `<${pascalCaseName}`;
+    if (!indexContent.includes(componentTag)) {
+        const targetTag = `id="${position}"`;
+        let insertionIndex = indexContent.indexOf(targetTag);
+
+        if (insertionIndex !== -1) {
+          const closingWrapperTag = '</SectionWrapper>';
+          insertionIndex = indexContent.indexOf(closingWrapperTag, insertionIndex);
+          if (insertionIndex !== -1) {
+            insertionIndex += closingWrapperTag.length;
+          }
+        }
+        
+        if (insertionIndex === -1) {
+          console.warn(`⚠️ Could not find section with id="${position}". Falling back to inserting before </main>.`);
+          insertionIndex = indexContent.lastIndexOf('</main>');
+        }
+
+        if (insertionIndex === -1) {
+            return { success: false, error: 'Could not find a valid insertion point in index.astro.' };
+        }
+
+        indexContent = 
+          indexContent.slice(0, insertionIndex) + 
+          newSectionHtml + 
+          indexContent.slice(insertionIndex);
+    }
+
+    await fs.writeFile(indexPath, indexContent, 'utf-8');
+    console.log(`✅ Updated ${indexPath} to include new component.`);
+
+    return {
+      success: true,
+      filePath: newComponentPath,
+    };
+
+  } catch (error) {
+    console.error('❌ Vision Creator Handler Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error during file creation'
+    };
+  }
+} 

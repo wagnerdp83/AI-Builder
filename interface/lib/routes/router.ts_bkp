@@ -1,0 +1,221 @@
+import { handleTextChange, isTextUpdate } from './route-text';
+import { handleTailwindUpdate, isTailwindUpdate } from './route-style';
+import { handleDOMChange, isDOMStructureChange } from './route-structure';
+
+export type RouteType = 'text' | 'style' | 'structure' | 'meta' | 'media' | 'unknown';
+
+export interface RouterResponse {
+  success: boolean;
+  route: RouteType;
+  result: any;
+  error?: string;
+}
+
+/**
+ * Master router that analyzes prompts and delegates to appropriate handlers
+ */
+export async function dispatchEdit(
+  userPrompt: string,
+  component?: string,
+  filename?: string
+): Promise<RouterResponse> {
+  console.log('\n=== Router Dispatch ===');
+  console.log('Prompt:', userPrompt);
+  console.log('Component:', component);
+
+  try {
+    // Detect the intent/route type
+    const routeType = detectIntent(userPrompt);
+    console.log('Detected route type:', routeType);
+
+    // Dispatch to appropriate handler
+    switch (routeType) {
+      case 'text':
+        const textResult = await handleTextChange(userPrompt, component, filename);
+        return {
+          success: textResult.success,
+          route: 'text',
+          result: textResult,
+          error: textResult.error
+        };
+
+      case 'style':
+        const styleResult = await handleTailwindUpdate(userPrompt, component, filename);
+        return {
+          success: styleResult.success,
+          route: 'style',
+          result: styleResult,
+          error: styleResult.error
+        };
+
+      case 'structure':
+        const structureResult = await handleDOMChange(userPrompt, component, filename);
+        return {
+          success: structureResult.success,
+          route: 'structure',
+          result: structureResult,
+          error: structureResult.error
+        };
+
+      case 'meta':
+        // TODO: Implement meta handler
+        return {
+          success: false,
+          route: 'meta',
+          result: null,
+          error: 'Meta updates not yet implemented'
+        };
+
+      case 'media':
+        // TODO: Implement media handler
+        return {
+          success: false,
+          route: 'media',
+          result: null,
+          error: 'Media updates not yet implemented'
+        };
+
+      default:
+        return {
+          success: false,
+          route: 'unknown',
+          result: null,
+          error: 'No matching handler found for prompt. Please be more specific about what you want to change.'
+        };
+    }
+
+  } catch (error) {
+    console.error('Router dispatch error:', error);
+    return {
+      success: false,
+      route: 'unknown',
+      result: null,
+      error: error instanceof Error ? error.message : 'Unknown routing error'
+    };
+  }
+}
+
+/**
+ * Detects the intent/route type from a user prompt
+ */
+function detectIntent(prompt: string): RouteType {
+  console.log('Analyzing prompt for intent...');
+
+  // Text content updates
+  if (isTextUpdate(prompt)) {
+    console.log('→ Text update detected');
+    return 'text';
+  }
+
+  // Style/Tailwind updates
+  if (isTailwindUpdate(prompt)) {
+    console.log('→ Style update detected');
+    return 'style';
+  }
+
+  // DOM structure changes
+  if (isDOMStructureChange(prompt)) {
+    console.log('→ Structure change detected');
+    return 'structure';
+  }
+
+  // Meta/SEO updates
+  if (isMetaUpdate(prompt)) {
+    console.log('→ Meta update detected');
+    return 'meta';
+  }
+
+  // Media updates
+  if (isMediaUpdate(prompt)) {
+    console.log('→ Media update detected');
+    return 'media';
+  }
+
+  console.log('→ No specific intent detected');
+  return 'unknown';
+}
+
+/**
+ * Detects meta/SEO update requests
+ */
+function isMetaUpdate(prompt: string): boolean {
+  const metaPatterns = [
+    /meta|seo|description|title tag/i,
+    /og:|open graph|social media/i,
+    /schema|structured data/i,
+    /canonical|robots/i,
+    /\w+:\s*(?:set|update|change).*(?:meta|seo|title)/i
+  ];
+
+  return metaPatterns.some(pattern => pattern.test(prompt));
+}
+
+/**
+ * Detects media update requests
+ */
+function isMediaUpdate(prompt: string): boolean {
+  const mediaPatterns = [
+    /image|img|photo|picture/i,
+    /video|mp4|youtube|vimeo/i,
+    /svg|icon|logo/i,
+    /url|link|href/i,
+    /src=|background-image/i,
+    /\w+:\s*(?:change|update|set).*(?:image|video|icon|url)/i
+  ];
+
+  return mediaPatterns.some(pattern => pattern.test(prompt));
+}
+
+/**
+ * Gets detailed information about what route would handle a prompt
+ */
+export function analyzePrompt(prompt: string): {
+  route: RouteType;
+  confidence: number;
+  reasoning: string;
+} {
+  const route = detectIntent(prompt);
+  let confidence = 0.5; // Default confidence
+  let reasoning = 'Generic pattern matching';
+
+  // Calculate confidence based on specificity
+  if (route === 'text') {
+    const textMatches = [
+      /(?:edit|update|change|set)\s+(?:hero\s+)?(?:headline|title|header)/i,
+      /(?:edit|update|change|set)\s+(?:hero\s+)?(?:subtitle|sub\s+title|sub\s+headline)/i,
+      /(?:edit|update|change|set)\s+(?:hero\s+)?(?:description|paragraph|text|content)/i,
+      /(?:edit|update|change|set)\s+(?:hero\s+)?(?:button|btn)/i,
+      /\w+:\s*(?:edit|update|change|set)\s+\w+\s+to/i,
+      /(?:edit|update|change|set)\s+.+?\s+to\s+.+/i
+    ].filter(pattern => pattern.test(prompt)).length;
+    confidence = Math.min(0.9, 0.6 + (textMatches * 0.1));
+    reasoning = `Detected ${textMatches} text-specific patterns`;
+  } else if (route === 'style') {
+    const styleMatches = [
+      /color|colour/i,
+      /background|bg-/i,
+      /tailwind|css/i,
+      /style|styling/i
+    ].filter(pattern => pattern.test(prompt)).length;
+    confidence = Math.min(0.9, 0.6 + (styleMatches * 0.15));
+    reasoning = `Detected ${styleMatches} style-specific patterns`;
+  } else if (route === 'structure') {
+    const structureMatches = [
+      /add|remove|create/i,
+      /element|component/i,
+      /before|after|inside/i
+    ].filter(pattern => pattern.test(prompt)).length;
+    confidence = Math.min(0.9, 0.6 + (structureMatches * 0.15));
+    reasoning = `Detected ${structureMatches} structure-specific patterns`;
+  }
+
+  return { route, confidence, reasoning };
+}
+
+/**
+ * Validates if a prompt can be handled by the router
+ */
+export function canHandle(prompt: string): boolean {
+  const analysis = analyzePrompt(prompt);
+  return analysis.route !== 'unknown' && analysis.confidence > 0.6;
+} 

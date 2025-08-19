@@ -1,0 +1,27 @@
+---
+const partners = [
+  { name: "Partner 1", logo: "/path/to/logo1.png", href: "#partner1" },
+  { name: "Partner 2", logo: "/path/to/logo2.png", href: "#partner2" },
+  { name: "Partner 3", logo: "/path/to/logo3.png", href: "#partner3" },
+  { name: "Partner 4", logo: "/path/to/logo4.png", href: "#partner4" }
+];
+
+const sectionTitle = "Our Partners";
+const sectionDescription = "We are proud to collaborate with these esteemed organizations.";
+---
+
+<section class="bg-gray-50 py-12">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center">
+      <h2 class="text-3xl font-extrabold text-gray-900">{sectionTitle}</h2>
+      <p class="mt-4 text-lg text-gray-600">{sectionDescription}</p>
+    </div>
+    <div class="mt-10 grid grid-cols-2 gap-8 md:grid-cols-4">
+      {partners.map(partner => (
+        <a href={partner.href} class="flex items-center justify-center bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300">
+          <img src={partner.logo} alt={partner.name} class="h-16 w-auto" />
+        </a>
+      ))}
+    </div>
+  </div>
+</section>

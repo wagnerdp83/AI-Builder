@@ -1,0 +1,48 @@
+---
+import { Image, ArrowRight, ArrowLeft } from '@lucide/astro';
+
+const items = [
+  {
+    "title": "Hair Transformation",
+    "image": "{{MOCKUP_IMAGE}}",
+    "description": "Before and after hair styling"
+  },
+  {
+    "title": "Makeup Makeover",
+    "image": "{{MOCKUP_IMAGE}}",
+    "description": "Professional makeup application"
+  }
+];
+const capabilitiesVersion = "1.0.0";
+const title = "Gallery";
+const subtitle = "";
+---
+
+<section class="py-16 bg-gradient-to-br from-pink-50 to-purple-50">
+  <div class="container mx-auto px-4">
+    <h2 class="text-4xl font-serif text-gray-800 mb-4">{title}</h2>
+    {subtitle && (<p class="text-xl font-serif text-gray-600 mb-8">{subtitle}</p>)}
+    
+    
+    <div class="overflow-x-auto pb-4">
+      <div class="flex space-x-8 min-w-max">
+        {items.map((item) => (
+          <div class="flex-shrink-0 w-80 bg-white rounded-lg shadow-lg overflow-hidden group">
+            <div class="relative h-96">
+              
+              <img src={item.beforeImage || "{{MOCKUP_IMAGE}}"} alt={item.title || 'Before image'} class="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-0" />
+              <img src={item.afterImage || "{{MOCKUP_IMAGE}}"} alt={item.title || 'After image'} class="w-full h-full object-cover absolute top-0 left-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+              
+            </div>
+            <div class="p-6">
+              <p class="text-gray-800 font-serif">{item.title}</p>
+              {item.description && (<p class="text-gray-600 font-serif mt-2">{item.description}</p>)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+    <div class="flex items-center gap-4 mt-6 text-purple-600"><Image class="w-5 h-5" /> <ArrowRight class="w-5 h-5" /> <ArrowLeft class="w-5 h-5" /></div>
+    
+  </div>
+</section>

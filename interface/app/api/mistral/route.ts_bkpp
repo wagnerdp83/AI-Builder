@@ -1,0 +1,188 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { Mistral } from '@mistralai/mistralai';
+import { ASTRO_TOOLS } from '../../../lib/tools/astro-tools';
+import { handlers } from '../../../lib/tools/astro-handlers';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { analyzeScreenshot } from '@/lib/services/vision-api';
+
+const execAsync = promisify(exec);
+const PROJECT_ROOT = process.cwd().replace('/interface', '');
+const ASTRO_SERVER = process.env.NEXT_PUBLIC_ASTRO_URL || 'http://localhost:4321';
+
+const config = {
+  apiKey: process.env.MISTRAL_API_KEY,
+  debug: process.env.DEBUG_MISTRAL === 'true'
+};
+
+const mistralClient = new Mistral({
+  apiKey: config.apiKey as string
+});
+
+// Helper to find all Astro components
+async function findAllAstroComponents(): Promise<string[]> {
+  try {
+    const { stdout } = await execAsync(`cd "${PROJECT_ROOT}/rendering" && find src -type f -name "*.astro"`);
+    return stdout.split('\n').filter(Boolean);
+  } catch (error) {
+    console.error('Error finding components:', error);
+    return [];
+  }
+}
+
+// Helper to refresh Astro preview
+async function refreshAstroPreview(): Promise<boolean> {
+  const endpoints = [
+    `${ASTRO_SERVER}/_refresh`,
+    `${ASTRO_SERVER}/__refresh`,
+    `${ASTRO_SERVER}/_hmr`,
+    `${ASTRO_SERVER}/__hmr`,
+    `${ASTRO_SERVER}/__vite_ws`,
+    `${ASTRO_SERVER}/__vite_hmr`,
+  ];
+
+  let success = false;
+
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      });
+
+      if (response.ok || response.status === 426) {
+        success = true;
+        break;
+      }
+    } catch (error) {
+      console.error(`Failed to refresh using ${endpoint}:`, error);
+    }
+  }
+
+  return success;
+}
+
+interface ToolCall {
+  function: {
+    name: keyof typeof handlers;
+    arguments: string;
+  };
+}
+
+interface MistralResponse {
+  choices: [{
+    message: {
+      tool_calls?: ToolCall[];
+    };
+  }];
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    // Parse form data
+    const formData = await request.formData();
+    const prompt = formData.get('prompt') as string;
+    const image = formData.get('image') as File | null;
+    const highlightStr = formData.get('highlight') as string | null;
+    
+    if (!prompt) {
+      return NextResponse.json(
+        { error: 'Prompt is required' },
+        { status: 400 }
+      );
+    }
+
+    let visualContext = null;
+    if (image) {
+      // Convert image to base64
+      const imageBuffer = await image.arrayBuffer();
+      const base64Image = Buffer.from(imageBuffer).toString('base64');
+      const imageUrl = `data:${image.type};base64,${base64Image}`;
+
+      // Parse highlight if present
+      const highlight = highlightStr ? JSON.parse(highlightStr) : undefined;
+
+      // Analyze screenshot
+      visualContext = await analyzeScreenshot({
+        image: imageUrl,
+        prompt,
+        highlight
+      });
+    }
+
+    // Process with Mistral
+    const mistralResponse = await fetch(process.env.MISTRAL_API_URL || 'https://api.mistral.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'mistral-medium',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert UI developer assistant. Your task is to help modify UI components based on user requests.
+            ${visualContext ? `Visual Context: ${JSON.stringify(visualContext, null, 2)}` : ''}
+            
+            Available tools:
+            ${JSON.stringify(handlers, null, 2)}
+            
+            Respond with a tool call that best matches the user's request.`
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ]
+      })
+    });
+
+    if (!mistralResponse.ok) {
+      throw new Error('Failed to get response from Mistral API');
+    }
+
+    const mistralData = (await mistralResponse.json()) as MistralResponse;
+    console.log('Mistral response:', mistralData);
+
+    // Extract tool call from Mistral's response
+    const toolCall = mistralData.choices[0].message.tool_calls?.[0];
+    if (!toolCall) {
+      throw new Error('No tool call received from Mistral');
+    }
+
+    // Execute the tool call
+    const handler = handlers[toolCall.function.name];
+    if (!handler) {
+      throw new Error(`Unknown tool: ${toolCall.function.name}`);
+    }
+
+    const args = JSON.parse(toolCall.function.arguments);
+    if (visualContext) {
+      // Enhance args with visual context
+      args.selector = visualContext.selector;
+      args.file = visualContext.context.parentComponent;
+    }
+
+    const result = await handler(args);
+
+    return NextResponse.json({
+      success: true,
+      result,
+      visualContext
+    });
+
+  } catch (error: any) {
+    console.error('Error processing request:', error);
+    return NextResponse.json(
+      { error: 'Internal server error', details: error?.message || 'Unknown error' },
+      { status: 500 }
+    );
+  }
+} 

@@ -1,0 +1,453 @@
+# ASTRO COMPONENT GENERATION STANDARDS
+# GLOBAL PRINCIPLES - APPLY TO ALL ASTRO COMPONENTS
+
+## 🚨 CRITICAL REQUIREMENTS (GLOBAL STANDARDS)
+
+### ❌ ABSOLUTELY FORBIDDEN
+- **NEVER create duplicate Lucide imports** - Only ONE import statement per component
+- **NEVER use malformed URLs** - Always use single quotes: `"https://..."` NOT `""https://...""`
+- **NEVER repeat the same image URL** - Each image should be unique
+- **NEVER hardcode avatar paths** - Use `{{AVATAR_IMAGE}}` placeholder
+- **NEVER hardcode Unsplash URLs** - Use `{{MOCKUP_IMAGE}}` placeholder
+- **NEVER use React syntax** (className, key props, hooks)
+- **NEVER use template literals** (use `{variable}` not `${variable}`)
+- **NEVER use static icon mappings** - Framework handles all Lucide icons dynamically
+- **NEVER use JSX in helper functions** - Astro helper functions must return data, not JSX
+- **NEVER import from '../types'** - Define interfaces directly in component
+- **NEVER use ImageMetadata or getImage** - Use simple string URLs for images
+- **NEVER use async/await in map functions** - Use synchronous operations only
+- **NEVER generate generic components** - ALWAYS follow user's specific requirements
+- **NEVER skip requested features** - Include ALL elements user specified
+- **NEVER use 'lucide-astro' import** - ONLY use '@lucide/astro'
+- **NEVER use 'lucide-react' import** - ONLY use '@lucide/astro'
+- **NEVER use duplicate image URLs in arrays** - Each product/image must have unique URL
+- **NEVER use hardcoded image URLs** - Always use placeholders for dynamic replacement
+- **NEVER use React components in Astro** - Only use Astro-compatible components
+- **NEVER use undefined variables in map functions** - Always provide proper types
+- **NEVER use non-existent Lucide icons** - Only use valid Lucide Astro icons
+- **NEVER use wrong video source attributes** - Use 'src' not 'url' for video sources
+- **NEVER skip validation after component creation** - Always validate and fix lint errors
+- **NEVER import from 'solid-js'** - Solid.js is NOT compatible with Astro
+- **NEVER import from 'react'** - React is NOT compatible with Astro
+- **NEVER import from 'vue'** - Vue is NOT compatible with Astro
+- **NEVER import from 'svelte'** - Svelte is NOT compatible with Astro
+- **NEVER use framework-specific libraries** - Only use Astro-compatible libraries
+- **NEVER use client-side state management** - Use Astro's built-in reactivity
+- **NEVER use framework-specific hooks** - Use Astro's script tags for client-side code
+- **NEVER use framework-specific event handlers** - Use standard HTML event attributes
+- **NEVER use framework-specific refs** - Use standard HTML attributes and IDs
+- **NEVER use framework-specific reactive variables** - Use standard JavaScript variables
+
+### ✅ ABSOLUTELY REQUIRED
+- **ALWAYS use `{{MOCKUP_IMAGE}}` for dynamic images**
+- **ALWAYS use `{{AVATAR_IMAGE}}` for dynamic avatars**
+- **ALWAYS use `{{VIDEO_URL}}` for dynamic videos**
+- **ALWAYS consolidate Lucide imports into ONE statement**
+- **ALWAYS use proper TypeScript interfaces**
+- **ALWAYS provide default values for props**
+- **ALWAYS use Astro syntax** (class, not className)
+- **ALWAYS use any Lucide icon dynamically** - Framework auto-detects and imports
+- **ALWAYS use helper functions that return data objects** - Not JSX elements
+- **ALWAYS define interfaces directly in component** - Don't import from external types
+- **ALWAYS use simple string URLs** - No complex image optimization
+- **ALWAYS make all props optional** - Use `Partial<InterfaceName>` for props
+- **ALWAYS follow user's specific requirements EXACTLY** - No generic components
+- **ALWAYS include ALL requested features** - Product carousels, testimonials, etc.
+- **ALWAYS use rich, feature-complete components** - Not basic templates
+- **ALWAYS use '@lucide/astro' for imports** - Never use 'lucide-astro' or 'lucide-react'
+- **ALWAYS use unique image placeholders** - Each product should have unique `{{MOCKUP_IMAGE}}` placeholder
+- **ALWAYS use proper TypeScript types in map functions** - Explicitly type parameters
+- **ALWAYS validate component before saving** - Check for lint errors and fix them
+- **ALWAYS use proper video source attributes** - Use `src` not `url` for video sources
+- **ALWAYS run comprehensive validation after creation** - Use AstroLintValidator
+- **ALWAYS auto-fix common lint errors** - Apply fixes automatically
+- **ALWAYS ensure unique images for each product** - Use dynamic image fetching based on product name
+- **ALWAYS use only Astro-compatible libraries** - Only use libraries that work with Astro
+- **ALWAYS use standard HTML event attributes** - Use `onclick`, `onmouseenter`, etc.
+- **ALWAYS use standard JavaScript for client-side code** - Use `<script>` tags
+- **ALWAYS use standard HTML attributes** - Use `id`, `class`, `data-*` attributes
+- **ALWAYS use vanilla JavaScript for reactivity** - No framework-specific state management
+- **ALWAYS use standard DOM manipulation** - Use `document.querySelector`, `addEventListener`
+
+## 📋 COMPONENT STRUCTURE (GLOBAL STANDARDS)
+
+### Required Frontmatter Structure
+```astro
+---
+// ✅ CORRECT: Single consolidated import (framework auto-generates)
+import { Star, Heart, Camera, User, ShoppingCart, Leaf, Play } from '@lucide/astro';
+
+// ✅ CORRECT: TypeScript interfaces defined directly in component
+interface ComponentProps {
+  title?: string;
+  subtitle?: string;
+  image?: string;
+  avatar?: string;
+  videoSrc?: string;
+  products?: Product[];
+  testimonials?: Testimonial[];
+}
+
+// ✅ CORRECT: Props with defaults and placeholders
+const {
+  title = "Default Title",
+  subtitle = "Default subtitle",
+  image = "{{MOCKUP_IMAGE}}", // Will be replaced with Unsplash image
+  avatar = "{{AVATAR_IMAGE}}", // Will be replaced with random local avatar
+  videoSrc = "{{VIDEO_URL}}", // Will be replaced with Pexels video
+  products = [
+    { id: 1, name: "Product 1", price: "$19.99", image: "{{MOCKUP_IMAGE}}" },
+    { id: 2, name: "Product 2", price: "$29.99", image: "{{MOCKUP_IMAGE}}" }
+  ],
+  testimonials = [
+    { id: 1, name: "Customer 1", quote: "Great product!", rating: 5, avatar: "{{AVATAR_IMAGE}}" }
+  ]
+} = Astro.props as Partial<ComponentProps>;
+
+// ✅ CORRECT: Helper functions return data objects, not JSX
+const renderStars = (rating: number) => {
+  const stars = [];
+  for (let i = 0; i < 5; i++) {
+    const isFilled = i < rating;
+    stars.push({
+      filled: isFilled,
+      index: i
+    });
+  }
+  return stars;
+};
+---
+```
+
+## 🎨 DESIGN REQUIREMENTS (GLOBAL STANDARDS)
+
+### Icon Integration (100% DYNAMIC)
+- **Use ANY Lucide Astro component** - Framework auto-detects and imports
+- **Include multiple contextually relevant icons** for visual appeal
+- **Use icons that match component purpose** - Framework suggests appropriate icons
+- **Create visual hierarchy** with different icon sizes and colors
+- **NO STATIC MAPPINGS** - Framework handles all icon detection dynamically
+
+### Visual Design
+- **Use Tailwind CSS** for all styling
+- **Mobile-first responsive design** with `sm:`, `md:`, `lg:` prefixes
+- **Semantic HTML structure** with proper heading hierarchy
+- **Accessibility compliance** with ARIA labels and proper contrast
+
+## 🔧 TECHNICAL REQUIREMENTS (GLOBAL STANDARDS)
+
+### Astro-Specific Syntax
+- **Use `{variableName}` syntax** (not `${}`)
+- **Use `class=""` attributes** (not `className`)
+- **Use `.map()` without `key` props** (Astro doesn't need keys)
+- **Use `<slot />` for child content injection**
+- **Helper functions return data objects** - Not JSX elements
+
+### JavaScript Safety
+- **Always check for null/undefined** before accessing DOM elements
+- **Use optional chaining** (`?.`) for property access
+- **Convert booleans to strings** for attributes
+- **Wrap event listeners in null checks**
+
+### Critical Astro JSX Rules
+- **NEVER use JSX in helper functions** - Causes "Expected '>' but found 'class'" errors
+- **Helper functions should return data objects** - Let templates handle JSX rendering
+- **Use `.map()` in templates** - Not in helper functions
+- **Keep JSX only in template sections** - Not in frontmatter
+
+### Video Integration Requirements
+- **ALWAYS use `{{VIDEO_URL}}` placeholder** - Framework replaces with Pexels video
+- **ALWAYS include fallback image** - For video loading failures
+- **ALWAYS include video error handling** - JavaScript for graceful degradation
+- **ALWAYS use proper video attributes** - autoplay, loop, muted, playsinline
+- **ALWAYS use `src` attribute for video sources** - NOT `url`
+
+### Image Integration Requirements
+- **ALWAYS use `{{MOCKUP_IMAGE}}` for product/content images**
+- **ALWAYS use `{{AVATAR_IMAGE}}` for profile/avatar images**
+- **NEVER use ImageMetadata or getImage** - Use simple string URLs
+- **NEVER use async image optimization** - Keep components simple
+- **ALWAYS ensure unique images** - Each product should have unique placeholder
+- **ALWAYS use dynamic image fetching** - Based on product name/description
+
+### Rich Component Requirements
+- **ALWAYS include product carousels when requested**
+- **ALWAYS include testimonial sections when requested**
+- **ALWAYS include multiple CTAs when requested**
+- **ALWAYS include interactive elements when requested**
+- **ALWAYS follow user's specific layout requirements**
+- **ALWAYS include all requested features and sections**
+
+### Validation Requirements
+- **ALWAYS validate component before saving** - Check for lint errors
+- **ALWAYS fix duplicate imports** - Consolidate into single import
+- **ALWAYS fix wrong import sources** - Only use '@lucide/astro'
+- **ALWAYS fix TypeScript errors** - Provide proper types for map functions
+- **ALWAYS fix video source attributes** - Use `src` not `url`
+- **ALWAYS ensure unique image URLs** - No duplicates in arrays
+
+## 📋 VALIDATION CHECKLIST (GLOBAL STANDARDS)
+Before generating any component, ensure:
+
+- [ ] Single Lucide import statement (auto-generated)
+- [ ] Uses `{{MOCKUP_IMAGE}}` placeholders for images
+- [ ] Uses `{{AVATAR_IMAGE}}` placeholders for avatars
+- [ ] Uses `{{VIDEO_URL}}` placeholders for videos
+- [ ] No malformed URLs with double quotes
+- [ ] No duplicate image URLs in galleries
+- [ ] Proper TypeScript interfaces defined in component
+- [ ] Default values for all props
+- [ ] All props are optional (Partial<Interface>)
+- [ ] Multiple contextually relevant icons (any Lucide icon)
+- [ ] Responsive design with Tailwind
+- [ ] Semantic HTML structure
+- [ ] Accessibility attributes
+- [ ] Safe DOM element access
+- [ ] No lint errors
+- [ ] Helper functions return data objects (not JSX)
+- [ ] JSX only in template sections
+- [ ] No imports from '../types'
+- [ ] No ImageMetadata or getImage usage
+- [ ] No async/await in map functions
+- [ ] **FOLLOWS USER'S SPECIFIC REQUIREMENTS EXACTLY**
+- [ ] **INCLUDES ALL REQUESTED FEATURES**
+- [ ] **RICH, FEATURE-COMPLETE COMPONENTS**
+- [ ] **ONLY uses '@lucide/astro' imports**
+- [ ] **No duplicate image URLs in arrays**
+- [ ] **Proper TypeScript types in map functions**
+- [ ] **Video sources use 'src' attribute**
+- [ ] **Component validates without lint errors**
+
+## 🚫 EXAMPLES OF WHAT NOT TO DO
+
+```astro
+---
+// ❌ WRONG: Duplicate imports
+import { Leaf, Star } from '@lucide/astro';
+import { Leaf, Star, Heart } from '@lucide/astro'; // DUPLICATE!
+
+// ❌ WRONG: Wrong import source
+import { Star, ShoppingCart, MessageSquare } from 'lucide-astro'; // WRONG SOURCE!
+import { Star, Pill, Capsule, Stethoscope } from 'lucide-react'; // WRONG SOURCE!
+
+// ❌ WRONG: Framework-specific imports (CRITICAL ERROR)
+import { createSignal, onMount } from 'solid-js'; // NEVER USE SOLID-JS!
+import { createStore } from 'solid-js/store'; // NEVER USE SOLID-JS!
+import { useState, useEffect } from 'react'; // NEVER USE REACT!
+import { ref, onMounted } from 'vue'; // NEVER USE VUE!
+import { onMount } from 'svelte'; // NEVER USE SVELTE!
+
+// ❌ WRONG: Import from types
+import type { HeroProps } from '../types'; // DON'T IMPORT TYPES!
+
+// ❌ WRONG: Malformed URLs
+image: ""https://images.unsplash.com/photo-123..."", // DOUBLE QUOTES!
+
+// ❌ WRONG: Same image repeated
+items = [
+  { image: "https://same-url.jpg" },
+  { image: "https://same-url.jpg" }, // DUPLICATE!
+]
+
+// ❌ WRONG: Hardcoded avatar paths
+avatar: "Avatar_man.avif", // WRONG PATH!
+
+// ❌ WRONG: Static icon mappings
+const iconMap = { "star": "Star" }; // NO STATIC MAPPINGS!
+
+// ❌ WRONG: JSX in helper functions (causes syntax errors)
+const renderStars = (rating: number) => {
+  return [<Star />, <Star />]; // WRONG! Causes "Expected '>' but found 'class'"
+};
+
+// ❌ WRONG: ImageMetadata usage
+import type { ImageMetadata } from "astro";
+import { getImage } from "astro:assets";
+const getImageData = async (image: ImageMetadata) => {
+  return await getImage({ src: image, width: 600, height: 400, format: "webp" });
+};
+
+// ❌ WRONG: Async in map
+{items.map(async (item) => { // DON'T USE ASYNC IN MAP!
+  const optimizedImage = await getImageData(item.image);
+  return <div>...</div>;
+})}
+
+// ❌ WRONG: Generic component ignoring user requirements
+// User asked for product carousel and testimonials but got basic hero
+
+// ❌ WRONG: Wrong video source attribute
+<source url="video.mp4" type="video/mp4" /> // WRONG! Should be 'src'
+
+// ❌ WRONG: Untyped map parameters
+{products.map((product) => ( // MISSING TYPE!
+  <div>{product.name}</div>
+))}
+
+// ❌ WRONG: Duplicate image URLs in array
+products = [
+  { id: "1", name: "Product 1", image: "https://same-url.jpg" },
+  { id: "2", name: "Product 2", image: "https://same-url.jpg" }, // DUPLICATE!
+]
+
+// ❌ WRONG: Framework-specific event handlers
+<button onClick={handleClick}>Click me</button> // WRONG! Should be onclick
+
+// ❌ WRONG: Framework-specific refs
+<div ref={myRef}>Content</div> // WRONG! Use id instead
+
+// ❌ WRONG: Framework-specific reactive variables
+const [count, setCount] = createSignal(0); // WRONG! Use vanilla JS
+---
+```
+
+## ✅ EXAMPLES OF WHAT TO DO
+
+```astro
+---
+// ✅ CORRECT: Single consolidated import (framework auto-generates)
+import { Star, Heart, Camera, User, ShoppingCart, Leaf, Play } from '@lucide/astro';
+
+// ✅ CORRECT: Interfaces defined in component
+interface ComponentProps {
+  title?: string;
+  subtitle?: string;
+  image?: string;
+  avatar?: string;
+  videoSrc?: string;
+  products?: Product[];
+  testimonials?: Testimonial[];
+}
+
+// ✅ CORRECT: Proper image paths
+image = "{{MOCKUP_IMAGE}}", // Will be replaced dynamically
+avatar = "{{AVATAR_IMAGE}}", // Will be replaced dynamically
+ videoSrc = "{{VIDEO_URL}}", // Will be replaced with Pexels video
+
+// ✅ CORRECT: Unique images for galleries
+items = [
+  { image: "{{MOCKUP_IMAGE}}" }, // Each will be unique
+  { image: "{{MOCKUP_IMAGE}}" }, // Each will be unique
+]
+
+// ✅ CORRECT: Helper functions return data objects
+const renderStars = (rating: number) => {
+  const stars = [];
+  for (let i = 0; i < 5; i++) {
+    const isFilled = i < rating;
+    stars.push({
+      filled: isFilled,
+      index: i
+    });
+  }
+  return stars;
+};
+
+// ✅ CORRECT: Simple image usage
+<img src={item.image} alt={item.altText} class="w-full h-full object-cover" />
+
+// ✅ CORRECT: Synchronous map with proper types
+{items.map((item: Product) => (
+  <div class="...">
+    <img src={item.image} alt={item.altText} />
+  </div>
+))}
+
+// ✅ CORRECT: Proper video source attribute
+<source src="video.mp4" type="video/mp4" />
+
+// ✅ CORRECT: Standard HTML event attributes
+<button onclick="handleClick()" class="btn">Click me</button>
+
+// ✅ CORRECT: Standard HTML attributes
+<div id="my-element" class="content">Content</div>
+
+// ✅ CORRECT: Vanilla JavaScript for client-side code
+<script>
+  let currentIndex = 0;
+  const testimonials = document.querySelectorAll('.testimonial');
+  
+  function nextSlide() {
+    currentIndex = (currentIndex + 1) % testimonials.length;
+    updateCarousel();
+  }
+  
+  function updateCarousel() {
+    testimonials.forEach((testimonial, index) => {
+      testimonial.style.display = index === currentIndex ? 'block' : 'none';
+    });
+  }
+  
+  // Add event listeners
+  document.addEventListener('astro:page-load', () => {
+    const nextButton = document.querySelector('#next-btn');
+    if (nextButton) {
+      nextButton.addEventListener('click', nextSlide);
+    }
+  });
+</script>
+
+// ✅ CORRECT: Rich component with all requested features
+// User asked for product carousel and testimonials - INCLUDED!
+---
+
+<!-- ✅ CORRECT: JSX only in template sections -->
+<section>
+  {renderStars(rating).map(star => (
+    <Star class={`w-5 h-5 ${star.filled ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} />
+  ))}
+</section>
+
+<!-- ✅ CORRECT: Product carousel as requested -->
+<div class="product-carousel">
+  {products.map((product: Product) => (
+    <div class="product-card">
+      <img src={product.image} alt={product.name} />
+      <h3>{product.name}</h3>
+      <p>{product.price}</p>
+    </div>
+  ))}
+</div>
+
+<!-- ✅ CORRECT: Testimonials as requested -->
+<div class="testimonials">
+  {testimonials.map((testimonial: Testimonial) => (
+    <div class="testimonial-card">
+      <img src={testimonial.avatar} alt={testimonial.name} />
+      <p>{testimonial.quote}</p>
+      <div class="stars">
+        {renderStars(testimonial.rating).map(star => (
+          <Star class={`w-4 h-4 ${star.filled ? 'text-yellow-400' : 'text-gray-300'}`} />
+        ))}
+      </div>
+    </div>
+  ))}
+</div>
+
+<!-- ✅ CORRECT: Standard HTML event handlers -->
+<button id="next-btn" class="btn">Next</button>
+<button id="prev-btn" class="btn">Previous</button>
+```
+
+## 🎯 GLOBAL GENERATION PRINCIPLES
+
+When generating any Astro component:
+
+1. **START with CRITICAL REQUIREMENTS** - These are non-negotiable
+2. **APPLY COMPONENT STRUCTURE** - Follow the required patterns
+3. **ENHANCE with DESIGN** - Add visual appeal and accessibility
+4. **ENSURE TECHNICAL SAFETY** - Prevent errors and ensure performance
+5. **VALIDATE** - Check against the checklist
+6. **USE DYNAMIC ICONS** - Framework handles all Lucide icon detection and imports
+7. **KEEP JSX IN TEMPLATES** - Helper functions return data, not JSX
+8. **DEFINE INTERFACES LOCALLY** - Don't import from external types
+9. **USE SIMPLE IMAGES** - No complex image optimization
+10. **USE VIDEO PLACEHOLDERS** - Framework handles Pexels integration
+11. **FOLLOW USER REQUIREMENTS EXACTLY** - No generic components
+12. **INCLUDE ALL REQUESTED FEATURES** - Rich, complete components
+13. **VALIDATE BEFORE SAVING** - Fix all lint errors
+14. **USE UNIQUE IMAGE PLACEHOLDERS** - Each product gets unique image
+15. **USE PROPER TYPESCRIPT TYPES** - Explicitly type map parameters
+16. **USE CORRECT VIDEO ATTRIBUTES** - Use 'src' not 'url'
+
+**Note**: This file contains GLOBAL standards only. Dynamic context (business-specific requirements, user requests, component-specific needs) is handled by the dynamic-prompt-generator.ts service. The framework automatically detects and imports ALL Lucide icons used in the component. **CRITICAL**: Helper functions must return data objects, not JSX elements to avoid "Expected '>' but found 'class'" errors. **CRITICAL**: Never import from '../types' - define interfaces directly in components. **CRITICAL**: Always follow user's specific requirements exactly - generate rich, feature-complete components with all requested elements. **CRITICAL**: Only use '@lucide/astro' for imports - never use 'lucide-astro' or 'lucide-react'. **CRITICAL**: Always use unique image placeholders and proper TypeScript types in map functions. **CRITICAL**: Always validate components before saving to prevent lint errors. 

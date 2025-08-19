@@ -1,0 +1,383 @@
+import { readFile, writeFile } from 'fs/promises';
+import { join } from 'path';
+
+const PROJECT_ROOT = process.cwd().replace('/interface', '');
+
+export interface StructureUpdateRequest {
+  prompt: string;
+  component?: string;
+  action: 'add' | 'remove' | 'move' | 'modify';
+  element: string;
+  position?: 'before' | 'after' | 'inside' | 'replace';
+  target?: string;
+  content?: string;
+}
+
+export interface StructureUpdateResponse {
+  success: boolean;
+  component: string;
+  action: string;
+  changes: Array<{
+    type: string;
+    element: string;
+    position?: string;
+  }>;
+  file: string;
+  error?: string;
+}
+
+/**
+ * Handles DOM structure changes (add/remove/move elements)
+ */
+export async function handleDOMChange(
+  prompt: string,
+  component?: string,
+  filename?: string
+): Promise<StructureUpdateResponse> {
+  console.log('\n=== DOM Structure Update ===');
+  console.log('Prompt:', prompt);
+  console.log('Component:', component);
+
+  try {
+    // Parse structure update request
+    const structureRequest = parseStructureRequest(prompt, component);
+    console.log('Structure request:', structureRequest);
+
+    // Get component file path
+    const componentFile = filename || join(
+      PROJECT_ROOT,
+      'rendering',
+      'src',
+      'components',
+      `${(structureRequest.component || 'Unknown').charAt(0).toUpperCase() + (structureRequest.component || 'unknown').slice(1)}.astro`
+    );
+
+    // Read current content
+    const content = await readFile(componentFile, 'utf-8');
+    
+    // Apply the structure change
+    const updatedContent = await applyStructureChange(content, structureRequest);
+    
+    if (content === updatedContent) {
+      throw new Error(`No changes could be applied for ${structureRequest.action} operation`);
+    }
+
+    // Write updated content
+    await writeFile(componentFile, updatedContent, 'utf-8');
+
+    console.log('Structure update successful');
+    console.log('=== End Structure Update ===\n');
+
+    return {
+      success: true,
+      component: structureRequest.component || 'unknown',
+      action: structureRequest.action,
+      changes: [{
+        type: structureRequest.action,
+        element: structureRequest.element,
+        position: structureRequest.position
+      }],
+      file: componentFile
+    };
+
+  } catch (error) {
+    console.error('Structure update error:', error);
+    return {
+      success: false,
+      component: component || 'unknown',
+      action: 'error',
+      changes: [],
+      file: '',
+      error: error instanceof Error ? error.message : 'Unknown structure update error'
+    };
+  }
+}
+
+/**
+ * Parses a structure update request from natural language
+ */
+function parseStructureRequest(prompt: string, component?: string): StructureUpdateRequest {
+  let parsedComponent = component;
+  let instruction = prompt;
+
+  // Extract component if specified in format "component: instruction"
+  const componentMatch = prompt.match(/^(\w+):\s*(.+)$/);
+  if (componentMatch && !component) {
+    parsedComponent = componentMatch[1];
+    instruction = componentMatch[2];
+  }
+
+  // Determine the action type
+  const action = detectStructureAction(instruction);
+  const element = extractElement(instruction);
+  const position = extractPosition(instruction);
+  const target = extractTarget(instruction);
+  const content = extractContent(instruction);
+
+  if (!element) {
+    throw new Error('Could not determine what element to modify');
+  }
+
+  return {
+    prompt,
+    component: parsedComponent,
+    action,
+    element,
+    position,
+    target,
+    content
+  };
+}
+
+/**
+ * Detects the type of structure action being requested
+ */
+function detectStructureAction(instruction: string): 'add' | 'remove' | 'move' | 'modify' {
+  if (/add|insert|create|new/i.test(instruction)) return 'add';
+  if (/remove|delete|hide/i.test(instruction)) return 'remove';
+  if (/move|relocate|reorder/i.test(instruction)) return 'move';
+  
+  return 'modify';
+}
+
+/**
+ * Extracts the element type from the instruction
+ */
+function extractElement(instruction: string): string {
+  const elementPatterns = [
+    /(?:add|remove|create|insert)\s+(?:a\s+|an\s+)?(\w+)/i,
+    /(button|section|div|header|footer|nav|form|input|image|video|card|modal)/i,
+    /(h1|h2|h3|h4|h5|h6|p|span|ul|ol|li)/i
+  ];
+
+  for (const pattern of elementPatterns) {
+    const match = instruction.match(pattern);
+    if (match) {
+      return match[1].toLowerCase();
+    }
+  }
+
+  return 'div'; // Default element
+}
+
+/**
+ * Extracts the position from the instruction
+ */
+function extractPosition(instruction: string): 'before' | 'after' | 'inside' | 'replace' | undefined {
+  if (/before|above/i.test(instruction)) return 'before';
+  if (/after|below|following/i.test(instruction)) return 'after';
+  if (/inside|within|in/i.test(instruction)) return 'inside';
+  if (/replace|instead/i.test(instruction)) return 'replace';
+  
+  return undefined;
+}
+
+/**
+ * Extracts the target element for positioning
+ */
+function extractTarget(instruction: string): string | undefined {
+  const targetPatterns = [
+    /(?:before|after|above|below)\s+(?:the\s+)?(\w+)/i,
+    /(?:inside|within)\s+(?:the\s+)?(\w+)/i,
+    /(?:replace|instead\s+of)\s+(?:the\s+)?(\w+)/i
+  ];
+
+  for (const pattern of targetPatterns) {
+    const match = instruction.match(pattern);
+    if (match) {
+      return match[1];
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Extracts content for new elements
+ */
+function extractContent(instruction: string): string | undefined {
+  const contentPatterns = [
+    /with\s+(?:text\s+)?["\']([^"']+)["\']?/i,
+    /saying\s+["\']([^"']+)["\']?/i,
+    /content\s+["\']([^"']+)["\']?/i
+  ];
+
+  for (const pattern of contentPatterns) {
+    const match = instruction.match(pattern);
+    if (match) {
+      return match[1];
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Applies the structure change to the content
+ */
+async function applyStructureChange(
+  content: string,
+  request: StructureUpdateRequest
+): Promise<string> {
+  const { action, element, position, target, content: newContent } = request;
+
+  switch (action) {
+    case 'add':
+      return addElement(content, element, position, target, newContent);
+    
+    case 'remove':
+      return removeElement(content, element);
+    
+    case 'move':
+      return moveElement(content, element, position, target);
+    
+    case 'modify':
+      return modifyElement(content, element, newContent);
+    
+    default:
+      throw new Error(`Unsupported structure action: ${action}`);
+  }
+}
+
+/**
+ * Adds a new element to the content
+ */
+function addElement(
+  content: string,
+  element: string,
+  position?: string,
+  target?: string,
+  newContent?: string
+): string {
+  const elementTag = createElementTag(element, newContent);
+  
+  if (!target || !position) {
+    // Add at the end of the main content area
+    return content.replace(
+      /(<\/div>\s*<\/div>\s*$)/,
+      `  ${elementTag}\n$1`
+    );
+  }
+
+  // Find target element and add relative to it
+  const targetRegex = new RegExp(`(<${target}[^>]*>.*?<\/${target}>)`, 'is');
+  const targetMatch = content.match(targetRegex);
+  
+  if (targetMatch) {
+    switch (position) {
+      case 'before':
+        return content.replace(targetRegex, `${elementTag}\n$1`);
+      case 'after':
+        return content.replace(targetRegex, `$1\n${elementTag}`);
+      case 'inside':
+        return content.replace(
+          new RegExp(`(<${target}[^>]*>)(.*?)(<\/${target}>)`, 'is'),
+          `$1$2\n  ${elementTag}\n$3`
+        );
+      default:
+        return content.replace(targetRegex, `$1\n${elementTag}`);
+    }
+  }
+
+  return content;
+}
+
+/**
+ * Removes an element from the content
+ */
+function removeElement(content: string, element: string): string {
+  // Remove specific element tags
+  const patterns = [
+    new RegExp(`<${element}[^>]*>.*?<\/${element}>`, 'gis'),
+    new RegExp(`<${element}[^>]*\/>`, 'gis')
+  ];
+
+  let result = content;
+  for (const pattern of patterns) {
+    result = result.replace(pattern, '');
+  }
+
+  return result;
+}
+
+/**
+ * Moves an element to a new position
+ */
+function moveElement(
+  content: string,
+  element: string,
+  position?: string,
+  target?: string
+): string {
+  // First extract the element
+  const elementRegex = new RegExp(`(<${element}[^>]*>.*?<\/${element}>)`, 'is');
+  const elementMatch = content.match(elementRegex);
+  
+  if (!elementMatch) {
+    return content;
+  }
+
+  const elementTag = elementMatch[1];
+  
+  // Remove from current position
+  const withoutElement = content.replace(elementRegex, '');
+  
+  // Add at new position
+  return addElement(withoutElement, element, position, target, elementTag);
+}
+
+/**
+ * Modifies an existing element
+ */
+function modifyElement(content: string, element: string, newContent?: string): string {
+  if (!newContent) {
+    return content;
+  }
+
+  // Update element content
+  return content.replace(
+    new RegExp(`(<${element}[^>]*>).*?(<\/${element}>)`, 'is'),
+    `$1${newContent}$2`
+  );
+}
+
+/**
+ * Creates an HTML element tag with content
+ */
+function createElementTag(element: string, content?: string): string {
+  const defaultContent = content || `New ${element}`;
+  
+  switch (element.toLowerCase()) {
+    case 'button':
+      return `<button class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">${defaultContent}</button>`;
+    
+    case 'section':
+      return `<section class="py-8">\n    <h2 class="text-2xl font-bold mb-4">${defaultContent}</h2>\n  </section>`;
+    
+    case 'card':
+      return `<div class="bg-white rounded-lg shadow-md p-6">\n    <h3 class="text-xl font-semibold mb-2">${defaultContent}</h3>\n  </div>`;
+    
+    case 'header':
+      return `<header class="bg-gray-800 text-white p-4">\n    <h1 class="text-2xl font-bold">${defaultContent}</h1>\n  </header>`;
+    
+    default:
+      return `<${element}>${defaultContent}</${element}>`;
+  }
+}
+
+/**
+ * Validates if a prompt is a structure update request
+ */
+export function isDOMStructureChange(prompt: string): boolean {
+  const structurePatterns = [
+    /add\s+(?:a\s+|an\s+)?\w+/i,
+    /remove\s+(?:the\s+)?\w+/i,
+    /delete\s+(?:the\s+)?\w+/i,
+    /move\s+(?:the\s+)?\w+/i,
+    /insert\s+(?:a\s+|an\s+)?\w+/i,
+    /create\s+(?:a\s+|an\s+)?\w+/i,
+    /\w+:\s*(?:add|remove|move|create|insert)/i
+  ];
+
+  return structurePatterns.some(pattern => pattern.test(prompt));
+} 

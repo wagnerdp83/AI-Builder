@@ -1,0 +1,87 @@
+---
+// Import the base layout - this is already optimized for performance
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Performance Test Page">
+  <header class="py-6 px-4 md:px-8 lg:px-12 border-b border-gray-200">
+    <div class="container mx-auto">
+      <h1 class="text-2xl font-bold text-gray-800">Performance Test Page</h1>
+    </div>
+  </header>
+  
+  <main>
+    <!-- Hero Section - Simplified -->
+    <section class="py-12 bg-white">
+      <div class="container mx-auto px-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+          <div>
+            <h2 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4">
+              Web & Digital Real Estate Platform
+            </h2>
+            <p class="text-gray-600 mb-6">
+              A full-featured, integrated real estate platform designed for small and medium businesses — easy to use, scalable, and supported with complete training.
+            </p>
+            <div class="space-y-3 md:space-y-0 md:space-x-3 md:flex">
+              <a href="#" class="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg font-medium">Learn More</a>
+              <a href="#" class="inline-block bg-gray-200 text-gray-800 px-6 py-3 rounded-lg font-medium">Contact Us</a>
+            </div>
+          </div>
+          <div>
+            <!-- Simple image with explicit dimensions for better CLS -->
+            <img 
+              src="/images/hero-placeholder.jpg" 
+              alt="Real Estate Platform" 
+              width="600"
+              height="400"
+              class="rounded-lg shadow-md"
+              style="aspect-ratio: 600/400"
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Feature Section - Pure HTML/CSS -->
+    <section class="py-12 bg-gray-50">
+      <div class="container mx-auto px-4">
+        <h2 class="text-3xl font-bold text-center mb-12">Key Features</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div class="bg-white p-6 rounded-lg shadow-md">
+              <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 class="text-xl font-semibold mb-2">Feature {i + 1}</h3>
+              <p class="text-gray-600">
+                This is a sample feature description that highlights the benefits of our platform.
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+    
+    <!-- Call to Action - Simple -->
+    <section class="py-12 bg-blue-600 text-white">
+      <div class="container mx-auto px-4 text-center">
+        <h2 class="text-3xl font-bold mb-4">Ready to get started?</h2>
+        <p class="mb-8 max-w-2xl mx-auto">
+          Join thousands of satisfied customers using our platform.
+        </p>
+        <a href="#" class="inline-block bg-white text-blue-600 px-8 py-3 rounded-lg font-medium">
+          Contact Us
+        </a>
+      </div>
+    </section>
+  </main>
+  
+  <footer class="py-8 bg-gray-800 text-white">
+    <div class="container mx-auto px-4">
+      <p class="text-center">© 2023 Real Estate Platform. All rights reserved.</p>
+    </div>
+  </footer>
+</BaseLayout> 

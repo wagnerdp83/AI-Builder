@@ -1,0 +1,20 @@
+---
+// src/components/SectionWrapper.astro
+interface Props {
+  id: string;
+  title?: string; // Optional title, defaults to id if not provided
+  // isLazyLoaded?: boolean; // Removed as it's not implementing lazy loading itself
+}
+
+const { id, title } = Astro.props; // Removed isLazyLoaded
+const displayTitle = title || id.charAt(0).toUpperCase() + id.slice(1);
+---
+
+<div id={id} class="relative border border-blue-300  rounded-md shadow-sm">
+  <div class="absolute top-0 z-10 left-0 transform -translate-y-1/2 translate-x-4">
+    <span class="bg-blue-300 text-blue-800 px-3 py-1 text-xs font-bold rounded-full shadow">
+      {displayTitle}
+    </span>
+  </div>
+  <slot />
+</div> 

@@ -1,0 +1,85 @@
+/* 
+ * Tailwind CSS with performance optimizations
+ * Only include essential utilities and base styles
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Tailwind components for better performance */
+@layer components {
+  /* Base container with responsive padding */
+  .container-fluid {
+    @apply w-full max-w-[85rem] px-4 sm:px-6 lg:px-8 mx-auto;
+  }
+
+  /* Section spacing */
+  .section-spacing {
+    @apply py-10 lg:py-14;
+  }
+
+  /* Card base - used in multiple places */
+  .card-base {
+    @apply bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden;
+  }
+
+  /* Heading styles */
+  .heading-xl {
+    @apply text-2xl font-bold md:text-4xl md:leading-tight text-gray-800;
+  }
+
+  .heading-lg {
+    @apply text-xl font-bold md:text-2xl md:leading-tight text-gray-800;
+  }
+
+  .heading-md {
+    @apply text-lg font-semibold md:text-xl text-gray-800;
+  }
+
+  /* Button styles */
+  .btn-primary {
+    @apply py-3 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-transparent bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-secondary {
+    @apply py-3 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  /* Grid layouts */
+  .grid-features {
+    @apply grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6;
+  }
+
+  .grid-testimonials {
+    @apply grid md:grid-cols-3 gap-8;
+  }
+}
+
+/* Use Tailwind's JIT compiler to reduce CSS output */
+@layer utilities {
+  /* High-performance utility classes */
+  .gpu-accelerated {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000;
+    will-change: transform;
+  }
+
+  .optimize-legibility {
+    text-rendering: optimizeLegibility;
+  }
+
+  .optimize-rendering {
+    image-rendering: optimizeQuality;
+  }
+
+  /* Explicit height/width utilities for performance */
+  .aspect-4-3 {
+    aspect-ratio: 4/3;
+  }
+
+  .aspect-16-9 {
+    aspect-ratio: 16/9;
+  }
+}

@@ -1,0 +1,33 @@
+/* Import visibility optimizations */
+@import "./visibility-optimizations.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    @apply text-gray-900 dark:bg-gray-900 dark:text-white;
+    background-color: #ecedee8a;
+  }
+
+  img {
+    @apply max-w-full h-auto;
+  }
+}
+
+@layer components {
+  .container {
+    @apply mx-auto px-4 sm:px-1 lg:px-1 max-w-1xl;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

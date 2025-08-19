@@ -1,0 +1,137 @@
+/* Auto-extracted styles from HTML */
+
+/* External stylesheet: https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/3.4.1/tailwind.min.css */
+/* You may need to manually include this in your Astro setup */
+
+/* External stylesheet: https://fonts.googleapis.com/css2?family=Switzer:wght@400;600;700;900&display=swap */
+/* You may need to manually include this in your Astro setup */
+
+/* External stylesheet: https://fonts.googleapis.com/css2?family=Satoshi:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&display=swap */
+/* You may need to manually include this in your Astro setup */
+
+/* External stylesheet: https://fonts.googleapis.com/css2?family=Chillax:wght@400;600;700&display=swap */
+/* You may need to manually include this in your Astro setup */
+
+/* External stylesheet: https://fonts.googleapis.com/css2?family=Panchang:wght@700&display=swap */
+/* You may need to manually include this in your Astro setup */
+
+/* External stylesheet: https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css */
+/* You may need to manually include this in your Astro setup */
+
+/* Embedded style block 1 */
+
+body {
+font-family: 'Satoshi', sans-serif;
+}
+h1, h2, h3, h4, h5 { font-family: 'Switzer', sans-serif; }
+p, a, li { font-family: 'Satoshi', sans-serif; }
+.font-chillax { font-family: 'Chillax', sans-serif; }
+.font-panchang { font-family: 'Panchang', sans-serif; }
+
+@keyframes fadeIn {
+from { opacity: 0; transform: translateY(20px); }
+to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes floatUp {
+0% { transform: translateY(0px); }
+50% { transform: translateY(-15px); }
+100% { transform: translateY(0px); }
+}
+
+@keyframes pulse {
+0% { transform: scale(1); }
+50% { transform: scale(1.05); }
+100% { transform: scale(1); }
+}
+
+.animate-fade-in {
+animation: fadeIn 0.8s ease-out forwards;
+}
+
+.animate-float {
+animation: floatUp 6s ease-in-out infinite;
+}
+
+.animate-pulse-slow {
+animation: pulse 4s ease-in-out infinite;
+}
+
+::-webkit-scrollbar {
+width: 8px;
+height: 8px;
+}
+
+::-webkit-scrollbar-track {
+background: #f1f1f1;
+border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+background: #888;
+border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+background: #555;
+}
+
+.bg-radial-gradient {
+background: radial-gradient(circle at center, var(--tw-gradient-from) 0%, var(--tw-gradient-to) 100%);
+}
+
+.bg-conic-gradient {
+background: conic-gradient(from 0deg, #fcd6ff, #29d8ff, #fffd82, #f236ff, #fcd6ff);
+}
+
+.menu-transition {
+transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.feature-card {
+transition: all 0.3s ease;
+}
+
+.feature-card:hover {
+transform: translateY(-5px);
+box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+}
+
+.btn-primary {
+transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+transform: translateY(-2px);
+}
+
+.scroll-snap-x {
+scroll-snap-type: x mandatory;
+}
+
+.scroll-snap-x > div {
+scroll-snap-align: start;
+}
+
+.image-loading {
+position: relative;
+overflow: hidden;
+}
+
+.image-loading::before {
+content: "";
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+0% { transform: translateX(-100%); }
+100% { transform: translateX(100%); }
+}
+
+

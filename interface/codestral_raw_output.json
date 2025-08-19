@@ -1,0 +1,127 @@
+{
+  "components": [
+    {
+      "name": "Header",
+      "code":"---\\bnconst\b \bTITLE\b = '\bPathway\b - \bProductivity\b \bSaaS\b \bPlatform\b';\\bnconst\b \bDESCRIPTION\b = '\bCelebrate\b \bthe\b \bjoy\b \bof\b \baccomplishment\b \bwith\b \ban\b \bapp\b \bdesigned\b \bto\b \btrack\b \byour\b \bprogress\b, \bmotivate\b \byour\b \befforts\b, \band\b \bcelebrate\b \byour\b \bsuccesses\b.';\\bnconst\b \bFAVICON\b = '\bdata\b:\bimage\b/\bsvg\b+\bxml\b,<\bsvg\b \bxmlns\b=\\'\bhttp\b://\bwww\b.\bw3\b.\borg\b/\b2000\b/\bsvg\b\\' \bviewBox\b=\\'\b0\b \b0\b \b100\b \b100\b\\'><\brect\b \bwidth\b=\\'\b100\b\\' \bheight\b=\\'\b100\b\\' \brx\b=\\'\b20\b\\' \bfill\b=\\'\bblack\b\\'/><\bpath\b \bd\b=\\'\bM50\b \b30L70\b \b70H30L50\b \b30Z\b\\' \bfill\b=\\'\burl\b(%\b23grad\b)\\' \btransform\b=\\'\brotate\b(-\b45\b \b50\b \b50\b)\\'/><\bdefs\b><\blinearGradient\b \bid\b=\\'\bgrad\b\\' \bx1\b=\\'\b0\b%\\' \by1\b=\\'\b0\b%\\' \bx2\b=\\'\b100\b%\\' \by2\b=\\'\b100\b%\\'><\bstop\b \boffset\b=\\'\b0\b%\\' \bstop\b-\bcolor\b=\\'%\b23fcd6ff\b\\'/><\bstop\b \boffset\b=\\'\b25\b%\\' \bstop\b-\bcolor\b=\\'%\b2329d8ff\b\\'/><\bstop\b \boffset\b=\\'\b50\b%\\' \bstop\b-\bcolor\b=\\'%\b23fffd82\b\\'/><\bstop\b \boffset\b=\\'\b75\b%\\' \bstop\b-\bcolor\b=\\'%\b23f236ff\b\\'/><\bstop\b \boffset\b=\\'\b100\b%\\' \bstop\b-\bcolor\b=\\'%\b23fcd6ff\b\\'/></\blinearGradient\b></\bdefs\b></\bsvg\b>';\\bnconst\b \bTAILWIND_CSS\b = '\bhttps\b://\bcdnjs\b.\bcloudflare\b.\bcom\b/\bajax\b/\blibs\b/\btailwindcss\b/\b3\b.\b4\b.\b1\b/\btailwind\b.\bmin\b.\bcss\b';\\bnconst\b \bFONT_SWITZER\b = '\bhttps\b://\bfonts\b.\bgoogleapis\b.\bcom\b/\bcss2\b?\bfamily\b=\bSwitzer\b:\bwght\b@\b400\b;\b600\b;\b700\b;\b900\b&\bdisplay\b=\bswap\b';\\bnconst\b \bFONT_SATOSHI\b = '\bhttps\b://\bfonts\b.\bgoogleapis\b.\bcom\b/\bcss2\b?\bfamily\b=\bSatoshi\b:\bital\b,\bwght\b@\b0\b,\b400\b;\b0\b,\b500\b;\b0\b,\b700\b;\b1\b,\b400\b;\b1\b,\b500\b;\b1\b,\b700\b&\bdisplay\b=\bswap\b';\\bnconst\b \bFONT_CHILLAX\b = '\bhttps\b://\bfonts\b.\bgoogleapis\b.\bcom\b/\bcss2\b?\bfamily\b=\bChillax\b:\bwght\b@\b400\b;\b600\b;\b700\b&\bdisplay\b=\bswap\b';\\bnconst\b \bFONT_PANCHANG\b = '\bhttps\b://\bfonts\b.\bgoogleapis\b.\bcom\b/\bcss2\b?\bfamily\b=\bPanchang\b:\bwght\b@\b700\b&\bdisplay\b=\bswap\b';\\bnconst\b \bFONT_AWESOME\b = '\bhttps\b://\bcdnjs\b.\bcloudflare\b.\bcom\b/\bajax\b/\blibs\b/\bfont\b-\bawesome\b/\b6\b.\b5\b.\b1\b/\bcss\b/\ball\b.\bmin\b.\bcss\b';\\bnconst\b \bLOGO_URL\b = '#';\\bnconst\b \bDESTINATIONS_URL\b = '#\bdestinations\b';\\bnconst\b \bTOURS_URL\b = '#\btours\b';\\bnconst\b \bABOUT_US_URL\b = '#\babout\b-\bus\b';\\bnconst\b \bCONTACT_URL\b = '#\bcontact\b';\\bnconst\b \bSEARCH_URL\b = '#\bsearch\b';\\bnconst\b \bMOBILE_MENU_BUTTON_ID\b = '\bmobile\b-\bmenu\b-\bbutton\b';\\bnconst\b \bCLOSE_MENU_BUTTON_ID\b = '\bclose\b-\bmenu\b';\\bnconst\b \bMOBILE_MENU_ID\b = '\bmobile\b-\bmenu\b';\\bnconst\b \bNAVBAR_ID\b = '\bnavbar\b';\\bnconst\b \bBACK_TO_TOP_BUTTON_ID\b = '\bback\b-\bto\b-\btop\b';\\bn\b---\\bn\b<!\bDOCTYPE\b \bhtml\b>\\bn\b<\bhtml\b \blang\b=\\"en\">
+<head>
+<meta charset=\"UTF-8\">
+<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+<title>{TITLE}</title>
+<meta name=\"description\" content=\"{DESCRIPTION}\">
+<link rel=\"icon\" href=\"{FAVICON}\">
+<link rel=\"stylesheet\" href=\"{TAILWIND_CSS}\" integrity=\"sha512-Bjtz/W+gWdn+64bV+L/1a4zqXpdw+Q+R5R9WpX/lqc9u1g+n554q1/1y21i/5W+bX/bX/qZ/6e/bX/bX/qZ/6e/bX/bX/qZ/6e\" crossorigin=\"anonymous\" referrerpolicy=\"no-referrer\" />
+<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">
+<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>
+<link href=\"{FONT_SWITZER}\" rel=\"stylesheet\">
+<link href=\"{FONT_SATOSHI}\" rel=\"stylesheet\">
+<link href=\"{FONT_CHILLAX}\" rel=\"stylesheet\">
+<link href=\"{FONT_PANCHANG}\" rel=\"stylesheet\">
+<link rel=\"stylesheet\" href=\"{FONT_AWESOME}\" integrity=\"\" crossorigin=\"anonymous\" referrerpolicy=\"no-referrer\" />
+</head>
+<body>
+<div id=\"main\" class=\"min-h-screen w-auto overflow-hidden\">
+<div class=\"fixed top-0 left-0 right-0 z-10 bg-black h-[46px] flex flex-row justify-center items-center gap-6\">
+<p class=\"text-sm text-white opacity-60\">Experience the future of travel with Wanderlust</p>
+</div>
+
+<header class=\"fixed top-[46px] left-0 right-0 z-10 h-[71px]\">
+<div class=\"max-w-[1200px] mx-auto backdrop-blur-[5px] bg-white/10 h-full transition-all duration-300\" id=\"{NAVBAR_ID}\">
+<div class=\"max-w-[1600px] mx-auto px-5 lg:px-10 flex justify-between items-center h-full\">
+<a href=\"{LOGO_URL}\" class=\"h-10 w-10 relative group\">
+<div class=\"absolute inset-0 bg-conic-gradient rounded-[9px] shadow-[-2px_2px_20px_0_rgba(241,56,255,0.3)] blur-[8px] opacity-50 group-hover:opacity-70 transition-opacity\"></div>
+<div class=\"absolute inset-0 bg-black rounded-lg\">
+<div class=\"absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[18px] h-[18px] bg-conic-gradient rounded-[2px] blur-[6px] transform rotate-[-45deg] group-hover:rotate-[0deg] transition-transform duration-300\"></div>
+<div class=\"absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[16px] h-[16px] bg-conic-gradient rounded-[2px] shadow-[-2px_2px_20px_0_rgba(241,56,255,0.3)] transform rotate-[-45deg] group-hover:scale-110 transition-transform duration-300\"></div>
+<div class=\"absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[8px] h-[8px] bg-black rounded-[1px] transform rotate-[-45deg]\"></div>
+</div>
+</a>
+
+<nav class=\"hidden lg:flex items-center justify-center gap-10\">
+<a href=\"{DESTINATIONS_URL}\" class=\"opacity-60 hover:opacity-100 transition-opacity\">Destinations</a>
+<a href=\"{TOURS_URL}\" class=\"opacity-60 hover:opacity-100 transition-opacity\">Tours</a>
+<a href=\"{ABOUT_US_URL}\" class=\"opacity-60 hover:opacity-100 transition-opacity\">About Us</a>
+<a href=\"{CONTACT_URL}\" class=\"opacity-60 hover:opacity-100 transition-opacity\">Contact</a>
+<a href=\"{SEARCH_URL}\" class=\"bg-black text-white rounded-lg px-5 py-3 shadow-[0px_0.602px_1.807px_-1.25px_rgba(0,0,0,0.072),0px_2.289px_6.866px_-2.5px_rgba(0,0,0,0.064),0px_10px_30px_-3.75px_rgba(0,0,0,0.025)] btn-primary\">Search</a>
+</nav>
+
+<button id=\"{MOBILE_MENU_BUTTON_ID}\" class=\"lg:hidden flex flex-col gap-1.5 p-2\" aria-label=\"Toggle menu\">
+<span class=\"w-6 h-0.5 bg-black rounded-full transition-transform\"></span>
+<span class=\"w-6 h-0.5 bg-black rounded-full transition-transform\"></span>
+<span class=\"w-6 h-0.5 bg-black rounded-full transition-transform\"></span>
+</button>
+</div>
+</div>
+
+<div id=\"{MOBILE_MENU_ID}\" class=\"fixed inset-0 bg-white z-20 p-6 pt-24 transform translate-x-full menu-transition lg:hidden\">
+<nav class=\"flex flex-col gap-6 text-lg\">
+<a href=\"{DESTINATIONS_URL}\" class=\"opacity-80 hover:opacity-100 transition-opacity\">Destinations</a>
+<a href=\"{TOURS_URL}\" class=\"opacity-80 hover:opacity-100 transition-opacity\">Tours</a>
+<a href=\"{ABOUT_US_URL}\" class=\"opacity-80 hover:opacity-100 transition-opacity\">About Us</a>
+<a href=\"{CONTACT_URL}\" class=\"opacity-80 hover:opacity-100 transition-opacity\">Contact</a>
+<a href=\"{SEARCH_URL}\" class=\"bg-black text-white rounded-lg px-5 py-3 shadow-md text-center mt-4\">Search</a>
+</nav>
+<button id=\"{CLOSE_MENU_BUTTON_ID}\" class=\"absolute top-6 right-6 p-2\" aria-label=\"Close menu\">
+<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">
+<line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"></line>
+<line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"></line>
+</svg>
+</button>
+</div>
+</header>
+</div>
+</body>
+</html>"
+    },
+    {
+      "name": "Hero",
+      "code":"---\\bnconst\b \bHERO_ID\b = '\bhero\b';\\bnconst\b \bSEARCH_URL\b = '#\bsearch\b';\\bnconst\b \bLEARN_MORE_URL\b = '#\blearn\b-\bmore\b';\\bnconst\b \bIMAGE_1_URL\b = '\bhttps\b://\bpicsum\b.\bphotos\b/\b800\b/\b900\b';\\bnconst\b \bIMAGE_2_URL\b = '\bhttps\b://\bpicsum\b.\bphotos\b/\b236\b/\b236\b';\\bnconst\b \bIMAGE_3_URL\b = '\bhttps\b://\bpicsum\b.\bphotos\b/\b243\b/\b243\b';\\bn\b---\\bn\b<\bsection\b \bid\b=\\"{HERO_ID}\" class=\"relative overflow-visible bg-radial-gradient from-[#bdccff] to-white pt-[260px] px-5 md:px-10 pb-[120px] z-0\">
+<div class=\"max-w-[1200px] mx-auto flex flex-col lg:flex-row justify-between items-center\">
+<div class=\"flex flex-col gap-7 max-w-[560px] animate-fade-in\" style=\"animation-delay: 0.2s\">
+<div class=\"bg-white/30 backdrop-blur-[5px] rounded-lg border border-solid border-gray-200/10 px-5 py-3 inline-flex items-center justify-center self-center lg:self-start\">
+<span class=\"inline-block w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse\"></span>
+Discover new destinations
+</div>
+<h1 class=\"font-switzer text-5xl sm:text-6xl lg:text-[90px] leading-tight tracking-[-2.5px] text-center lg:text-left\">
+<span class=\"text-transparent bg-clip-text bg-gradient-to-b from-black to-[#2240ab]\">Your Dream Getaway Awaits</span>
+</h1>
+<p class=\"opacity-80 max-w-[460px] text-lg leading-relaxed text-center lg:text-left\">Unforgettable travel experiences tailored for you.</p>
+<div class=\"flex justify-center lg:justify-start gap-4\">
+<a href=\"{SEARCH_URL}\" class=\"bg-black text-white rounded-lg px-6 py-3.5 shadow-[0px_0.602px_1.807px_-1.25px_rgba(0,0,0,0.072),0px_2.289px_6.866px_-2.5px_rgba(0,0,0,0.064),0px_10px_30px_-3.75px_rgba(0,0,0,0.025)] btn-primary\">Search Destinations</a>
+<a href=\"{LEARN_MORE_URL}\" class=\"text-black opacity-80 hover:opacity-100 underline flex items-center transition-opacity\">
+Learn more
+<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"ml-1\">
+<line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"></line>
+<polyline points=\"12 5 19 12 12 19\"></polyline>
+</svg>
+</a>
+</div>
+</div>
+<div class=\"relative w-full lg:w-[35%] h-[400px] lg:h-[552px] max-w-[600px] mt-12 lg:mt-0 animate-fade-in\" style=\"animation-delay: 0.6s\">
+<img src=\"{IMAGE_1_URL}\" alt=\"Productivity dashboard visualization\" class=\"absolute top-[-87px] left-[-73px] h-[500px] lg:h-[707px] filter drop-shadow-[-30px_-90px_26px_rgba(28,51,128,0.25)] rotate-[-163deg] animate-float\" style=\"animation-delay: 1s\">
+<img src=\"{IMAGE_2_URL}\" alt=\"Productivity chart\" class=\"absolute top-[-100px] lg:top-[-153px] left-[-100px] lg:left-[-205px] w-[180px] lg:w-[236px] h-[180px] lg:h-[236px] filter drop-shadow-[-30px_90px_26px_rgba(28,52,130,0.15)] animate-float\" style=\"animation-delay: 2s\">
+<img src=\"{IMAGE_3_URL}\" alt=\"Task completion graph\" class=\"absolute bottom-[-100px] lg:bottom-[-212px] right-[-50px] lg:right-[-101px] w-[180px] lg:w-[243px] h-[180px] lg:h-[243px] filter drop-shadow-[-30px_90px_26px_rgba(28,52,130,0.15)] rotate-[35deg] animate-float\" style=\"animation-delay: 0s\">
+</div>
+</div>
+
+<div class=\"absolute bottom-0 left-0 w-full h-20 bg-gradient-to-t from-white to-transparent\"></div>
+<div class=\"absolute top-[20%] left-[5%] w-16 h-16 rounded-full bg-blue-100 opacity-30 animate-float\" style=\"animation-delay: 3s\"></div>
+<div class=\"absolute top-[40%] right-[10%] w-8 h-8 rounded-full bg-purple-100 opacity-20 animate-float\" style=\"animation-delay: 1.5s\"></div>
+</section>"
+    },
+    {
+      "name": "Search",
+      "code":"---\\bnconst\b \bSEARCH_ID\b = '\bsearch\b';\\bn\b---\\bn\b<\bsection\b \bid\b=\\"{SEARCH_ID}\" class=\"relative py-24 px-6 md:px-12 lg:px-24 xl:px-36 bg-neutral-50\" style=\"margin-top: -4rem; border-radius: 30px 30px 0 0;\">
+<div class=\"text-center text-black\">
+<h2 class=\"text-3xl font-semibold mb-8\">Find Your Perfect Destination</h2>
+<div class=\"max-w-md mx-auto\">
+<div class=\"flex rounded-full shadow-lg overflow-hidden\">
+<input type=\"text\" placeholder=\"Where are you going?\" class=\"py-2 px-4 w-full bg-neutral-100 text-neutral-900 focus:outline-none\">
+<button class=\"bg-accent-500 hover:bg-accent-700 text-white py-2 px-6 rounded-r-full font-semibold\">Search</button>
+</div>
+</div>
+</div>
+</section>"
+    },
+    {
+      "name": "Destinations",
+      "code":"---\\bnconst\b \bDESTINATIONS_ID\b = '\bdestinations\b';\\bnconst\b \bIMAGE_1_URL\b = '\bhttps\b://\bpicsum\b.\bphotos\b/\b400\b/\b400\b?\brandom\b=\b17\b';\\bnconst\b \bIMAGE_2_URL\b = '\bhttps\b://\bpicsum\b.\bphotos\b/\b400\b/\b400\b?\brandom\b=\b18\b';\\bnconst\b \bIMAGE_3_URL\b = '\bhttps\b://\bpicsum\b.\bphotos\b/\b400\b/\b400\b?\brandom\b=\b19\b';\\bn\b---\\bn\b<\bsection\b \bid\b=\\"{DESTINATIONS_ID}\" class=\"bg-white px-5 md:px-10 py-20\">

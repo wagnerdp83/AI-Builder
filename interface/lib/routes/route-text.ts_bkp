@@ -1,0 +1,327 @@
+import { readFile, writeFile } from 'fs/promises';
+import { join } from 'path';
+
+const PROJECT_ROOT = process.cwd().replace('/interface', '');
+
+export interface TextUpdateRequest {
+  prompt: string;
+  component?: string;
+  instruction: string;
+  newContent: string;
+}
+
+export interface TextUpdateResponse {
+  success: boolean;
+  component: string;
+  action: string;
+  updatedContent: string;
+  file: string;
+  error?: string;
+}
+
+/**
+ * Dynamic text command parser - handles ANY natural language text update
+ */
+class TextCommandParser {
+  // Action words that indicate text updates
+  private static readonly ACTION_WORDS = [
+    'edit', 'update', 'change', 'set', 'modify', 'replace', 'alter', 'adjust',
+    'revise', 'rewrite', 'fix', 'correct', 'swap', 'switch', 'make'
+  ];
+
+  // Target elements that can be updated
+  private static readonly TARGET_ELEMENTS = {
+    // Headlines/Titles
+    headline: ['headline', 'header', 'heading', 'main title', 'title', 'h1', 'h2'],
+    subtitle: ['subtitle', 'sub title', 'sub-title', 'subheading', 'sub heading', 'sub-heading', 'tagline', 'h3', 'h4'],
+    title: ['title', 'heading', 'header'],
+    
+    // Content
+    description: ['description', 'desc', 'paragraph', 'para', 'text', 'content', 'copy', 'body'],
+    button: ['button', 'btn', 'cta', 'call to action', 'link'],
+    
+    // Generic
+    text: ['text', 'content', 'copy', 'words', 'writing'],
+  };
+
+  // Connection words that indicate the new content follows
+  private static readonly CONNECTORS = ['to', 'with', 'as', 'into', 'using', ':', '='];
+
+  /**
+   * Parse any natural language text command
+   */
+  static parseCommand(input: string): {
+    action: string;
+    target: string;
+    content: string;
+    component?: string;
+  } {
+    const normalized = input.toLowerCase().trim();
+    
+    // Extract component if specified - handle multiple formats
+    let component: string | undefined;
+    let command = normalized;
+    
+    // Format 1: "component: command" 
+    const colonMatch = normalized.match(/^(\w+)\s*[:]\s*(.+)$/);
+    if (colonMatch) {
+      component = colonMatch[1];
+      command = colonMatch[2];
+    } else {
+      // Format 2: "component action rest..." (e.g., "hero update title to...")
+      const componentFirstMatch = normalized.match(/^(\w+)\s+(edit|update|change|set|modify|replace|alter|adjust|revise|rewrite|fix|correct|swap|switch|make)\s+(.+)$/);
+      if (componentFirstMatch) {
+        component = componentFirstMatch[1];
+        command = `${componentFirstMatch[2]} ${componentFirstMatch[3]}`;
+      } else {
+        // Format 3: "action component rest..." (e.g., "update hero title to...")
+        const actionFirstMatch = normalized.match(/^(edit|update|change|set|modify|replace|alter|adjust|revise|rewrite|fix|correct|swap|switch|make)\s+(\w+)\s+(.+)$/);
+        if (actionFirstMatch) {
+          component = actionFirstMatch[2];
+          command = `${actionFirstMatch[1]} ${actionFirstMatch[3]}`;
+        }
+      }
+    }
+
+    // Find action word
+    const action = this.ACTION_WORDS.find(action => 
+      command.includes(action)
+    ) || 'update';
+
+    // Find target element
+    const target = this.findTarget(command);
+    
+    // Extract content (everything after connectors)
+    const content = this.extractContent(command);
+
+    return {
+      action,
+      target,
+      content,
+      component
+    };
+  }
+
+  /**
+   * Find the target element in the command
+   */
+  private static findTarget(command: string): string {
+    // Sort categories by specificity (more specific first)
+    const sortedCategories = Object.entries(this.TARGET_ELEMENTS).sort((a, b) => {
+      const aMaxLength = Math.max(...a[1].map(v => v.length));
+      const bMaxLength = Math.max(...b[1].map(v => v.length));
+      return bMaxLength - aMaxLength; // Longer (more specific) first
+    });
+
+    for (const [category, variations] of sortedCategories) {
+      for (const variation of variations) {
+        if (command.includes(variation)) {
+          return category;
+        }
+      }
+    }
+    
+    // If no specific target found, try to infer from context
+    if (command.includes('headline') || command.includes('main title') || command.includes('header')) return 'headline';
+    if (command.includes('subtitle') || command.includes('sub')) return 'subtitle';
+    if (command.includes('button') || command.includes('btn')) return 'button';
+    if (command.includes('description') || command.includes('paragraph')) return 'description';
+    
+    // Default to text for any content update
+    return 'text';
+  }
+
+  /**
+   * Extract the new content from the command
+   */
+  private static extractContent(command: string): string {
+    // Try each connector to find where the new content starts
+    for (const connector of this.CONNECTORS) {
+      const parts = command.split(connector);
+      if (parts.length >= 2) {
+        const content = parts.slice(1).join(connector).trim();
+        if (content.length > 0) {
+          return content;
+        }
+      }
+    }
+
+    // Fallback: try to extract content after common patterns
+    const fallbackPatterns = [
+      /(?:make it|set to|change to|update to|edit to|should be|becomes?)\s+(.+)/i,
+      /(?:say|read|display)\s+(.+)/i,
+      /(?:the new|new)\s+\w+\s+(?:is|should be)\s+(.+)/i
+    ];
+
+    for (const pattern of fallbackPatterns) {
+      const match = command.match(pattern);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+    }
+
+    // If all else fails, take the last meaningful part
+    const words = command.split(' ');
+    if (words.length > 3) {
+      return words.slice(-Math.ceil(words.length / 2)).join(' ');
+    }
+
+    return command;
+  }
+
+  /**
+   * Check if a string contains a text update command
+   */
+  static isTextCommand(input: string): boolean {
+    const normalized = input.toLowerCase();
+    
+    // Check for action words
+    const hasAction = this.ACTION_WORDS.some(action => normalized.includes(action));
+    
+    // Check for target elements
+    const hasTarget = Object.values(this.TARGET_ELEMENTS)
+      .flat()
+      .some(target => normalized.includes(target));
+    
+    // Check for connectors (indicating new content)
+    const hasConnector = this.CONNECTORS.some(connector => normalized.includes(connector));
+    
+    // Must have at least action + target OR action + connector
+    return hasAction && (hasTarget || hasConnector);
+  }
+}
+
+/**
+ * Handles text content updates using dynamic parsing
+ */
+export async function handleTextChange(
+  prompt: string,
+  component?: string,
+  filename?: string
+): Promise<TextUpdateResponse> {
+  console.log('\n=== Dynamic Text Content Update ===');
+  console.log('Prompt:', prompt);
+  
+  try {
+    // Parse the command dynamically
+    const parsed = TextCommandParser.parseCommand(prompt);
+    console.log('Parsed command:', parsed);
+    
+    const targetComponent = component || parsed.component;
+    if (!targetComponent) {
+      throw new Error('Component not specified. Use format: "ComponentName: command" or specify component parameter');
+    }
+
+    // Get component file path
+    const componentFile = filename || join(
+      PROJECT_ROOT,
+      'rendering',
+      'src',
+      'components',
+      `${targetComponent.charAt(0).toUpperCase() + targetComponent.slice(1)}.astro`
+    );
+
+    // Read current content
+    const content = await readFile(componentFile, 'utf-8');
+    
+    // Apply the text update using dynamic content replacement
+    const updatedContent = await applyDynamicTextUpdate(content, parsed);
+    
+    if (content === updatedContent) {
+      throw new Error(`No ${parsed.target} found in component to update`);
+    }
+
+    // Write updated content
+    await writeFile(componentFile, updatedContent, 'utf-8');
+
+    console.log('Dynamic text update successful');
+    console.log('=== End Dynamic Text Update ===\n');
+
+    return {
+      success: true,
+      component: targetComponent,
+      action: `${parsed.action}_${parsed.target}`,
+      updatedContent: parsed.content,
+      file: componentFile
+    };
+
+  } catch (error) {
+    console.error('Dynamic text update error:', error);
+    return {
+      success: false,
+      component: component || 'unknown',
+      action: 'error',
+      updatedContent: '',
+      file: '',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+}
+
+/**
+ * Dynamically apply text updates based on target type
+ */
+async function applyDynamicTextUpdate(
+  content: string,
+  parsed: { target: string; content: string; action: string }
+): Promise<string> {
+  const { target, content: newContent } = parsed;
+
+  // Define element selectors for different targets - more comprehensive patterns
+  const selectors = {
+    headline: [
+      /(<h1[^>]*>)([^<]+)(<\/h1>)/gi,
+      /(<h2[^>]*>)([^<]+)(<\/h2>)/gi,
+    ],
+    title: [
+      /(<h[1-3][^>]*>)([^<]+)(<\/h[1-3]>)/gi,
+    ],
+    subtitle: [
+      // Hero subtitle: first paragraph after h1
+      /(<h1[^>]*>[^<]+<\/h1>\s*<p[^>]*>)([^<]+)(<\/p>)/gi,
+      // Generic subtitle patterns
+      /(<h[3-6][^>]*>)([^<]+)(<\/h[3-6]>)/gi,
+      /(<p[^>]*class="[^"]*(?:sub|tag|desc)[^"]*"[^>]*>)([^<]+)(<\/p>)/gi,
+      // Any paragraph that might be a subtitle
+      /(<p[^>]*>)([^<]+)(<\/p>)/gi,
+    ],
+    description: [
+      /(<p[^>]*>)([^<]+)(<\/p>)/gi,
+      /(<div[^>]*class="[^"]*(?:desc|content)[^"]*"[^>]*>)([^<]+)(<\/div>)/gi,
+    ],
+    button: [
+      /(<button[^>]*>)([^<]+)(<\/button>)/gi,
+      /(<a[^>]*class="[^"]*(?:btn|button)[^"]*"[^>]*>)([^<]+)(<\/a>)/gi,
+      // More generic button patterns
+      /(<a[^>]*>)([^<]*(?:Request|Get|Click|Start|Learn|More|Button)[^<]*)(<\/a>)/gi,
+    ],
+    text: [
+      /(<h[1-6][^>]*>)([^<]+)(<\/h[1-6]>)/gi,
+      /(<p[^>]*>)([^<]+)(<\/p>)/gi,
+      /(<span[^>]*>)([^<]+)(<\/span>)/gi,
+      /(<div[^>]*>)([^<]+)(<\/div>)/gi,
+    ]
+  };
+
+  // Get selectors for the target type
+  const targetSelectors = selectors[target as keyof typeof selectors] || selectors.text;
+
+  // Try each selector until one works
+  let updatedContent = content;
+  for (const selector of targetSelectors) {
+    const testUpdate = updatedContent.replace(selector, `$1${newContent}$3`);
+    if (testUpdate !== updatedContent) {
+      updatedContent = testUpdate;
+      break; // Found and replaced, stop here
+    }
+  }
+
+  return updatedContent;
+}
+
+/**
+ * Dynamic validation for text update requests
+ */
+export function isTextUpdate(prompt: string): boolean {
+  return TextCommandParser.isTextCommand(prompt);
+} 

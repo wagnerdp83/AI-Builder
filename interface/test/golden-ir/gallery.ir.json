@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "componentName": "Gallery",
+  "semanticTag": "section",
+  "placeholders": ["MOCKUP_IMAGE", "AVATAR_IMAGE"],
+  "content": {
+    "headings": ["Before & After Gallery"],
+    "items": [
+      {
+        "title": "Hair Transformation",
+        "image": "{{MOCKUP_IMAGE}}",
+        "description": "Before and after hair styling"
+      },
+      {
+        "title": "Makeup Makeover",
+        "image": "{{MOCKUP_IMAGE}}",
+        "description": "Professional makeup application"
+      }
+    ]
+  },
+  "lucideIcons": ["Image", "ArrowRight", "ArrowLeft"],
+  "layout": "container",
+  "theme": "default",
+  "interactions": {
+    "beforeAfterHover": true,
+    "carousel": true
+  }
+} 

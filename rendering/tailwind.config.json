@@ -1,0 +1,77 @@
+{
+  "content": [
+    "./src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}",
+    "./node_modules/preline/preline.js"
+  ],
+  "darkMode": "class",
+  "future": {
+    "hoverOnlyWhenSupported": true,
+    "respectDefaultRingColorOpacity": true,
+    "disableColorOpacityUtilitiesByDefault": true,
+    "relativeContentPathsByDefault": true
+  },
+  "theme": {
+    "extend": {
+      "screens": {
+        "xs": "475px",
+        "sm": "640px",
+        "md": "768px",
+        "lg": "1024px",
+        "xl": "1280px",
+        "2xl": "1536px"
+      },
+      "container": {
+        "center": true,
+        "padding": {
+          "DEFAULT": "1rem",
+          "sm": "2rem",
+          "lg": "4rem",
+          "xl": "5rem",
+          "2xl": "6rem"
+        }
+      },
+      "colors": {
+        "first": "#383877",
+        "second": "#ea580c",
+        "third": "#1f2937"
+      },
+      "fontFamily": {
+        "sans": ["Inter", "system-ui", "sans-serif"],
+        "heading": ["Poppins", "system-ui", "sans-serif"],
+        "mono": ["JetBrains Mono", "monospace"]
+      },
+      "fontSize": {
+        "display-2xl": ["4.5rem", { "lineHeight": "1.1" }],
+        "display-xl": ["3.75rem", { "lineHeight": "1.1" }],
+        "display-lg": ["3rem", { "lineHeight": "1.1" }],
+        "display-md": ["2.25rem", { "lineHeight": "1.2" }],
+        "display-sm": ["1.875rem", { "lineHeight": "1.2" }]
+      },
+      "boxShadow": {
+        "soft-xl": "0 20px 27px rgba(0, 0, 0, 0.05)",
+        "soft-lg": "0 10px 15px rgba(0, 0, 0, 0.05)",
+        "soft-md": "0 4px 7px rgba(0, 0, 0, 0.05)",
+        "soft-sm": "0 2px 4px rgba(0, 0, 0, 0.05)"
+      },
+      "animation": {
+        "fade-in": "fadeIn 0.5s ease-in-out",
+        "slide-up": "slideUp 0.5s ease-in-out",
+        "slide-down": "slideDown 0.5s ease-in-out"
+      },
+      "keyframes": {
+        "fadeIn": {
+          "0%": { "opacity": "0" },
+          "100%": { "opacity": "1" }
+        },
+        "slideUp": {
+          "0%": { "transform": "translateY(10px)", "opacity": "0" },
+          "100%": { "transform": "translateY(0)", "opacity": "1" }
+        },
+        "slideDown": {
+          "0%": { "transform": "translateY(-10px)", "opacity": "0" },
+          "100%": { "transform": "translateY(0)", "opacity": "1" }
+        }
+      }
+    }
+  }
+}

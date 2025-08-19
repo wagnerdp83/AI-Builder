@@ -1,0 +1,16 @@
+{
+  "entryPointStrategy": "expand",
+  "entryPoints": [
+    "./app/**/*.tsx",
+    "./app/**/*.ts",
+    "./components/**/*.tsx",
+    "./components/**/*.ts",
+    "./lib/**/*.ts"
+  ],
+  "out": "docs",
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "theme": "default",
+  "name": "AI Page Builder Documentation",
+  "tsconfig": "./tsconfig.json"
+} 

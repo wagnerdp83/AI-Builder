@@ -1,0 +1,137 @@
+import { promises as fs } from 'fs';
+import path from 'path';
+
+export interface DomainSecurityContext {
+  forbiddenDomains: string[];
+  allowedImageSources: string[];
+  allowedAvatarSources: string[];
+  securityRules: string[];
+  validationRegex: string[];
+}
+
+export class DomainSecurityService {
+  private static contextCache: string | null = null;
+  private static contextPath = path.join(process.cwd(), 'lib', 'context', 'domain-security.context');
+
+  static async loadDomainSecurityContext(): Promise<string> {
+    if (this.contextCache) {
+      console.log('[DomainSecurity] Using cached domain security context');
+      return this.contextCache;
+    }
+
+    try {
+      const context = await fs.readFile(this.contextPath, 'utf-8');
+      this.contextCache = context;
+      return context;
+    } catch (error) {
+      const minimalContext = this.getMinimalContext();
+      return minimalContext;
+    }
+  }
+
+  private static getMinimalContext(): string {
+    return `# DOMAIN SECURITY CONTEXT - CRITICAL
+
+🚫 FORBIDDEN - ALL EXTERNAL DOMAINS:
+- **ALL external domains** are forbidden except Freepik
+- **ANY external domain** not explicitly allowed below
+
+✅ ALLOWED DOMAINS:
+- Freepik API: https://img.freepik.com/, https://api.freepik.com/
+- Local avatars: /images/avatars/*.avif (ONLY for testimonials)
+
+CRITICAL: NEVER use ANY external domains. ONLY use Freepik for images and local avatars for testimonials.`;
+  }
+
+  static async injectIntoSystemPrompt(basePrompt: string): Promise<string> {
+    const securityContext = await this.loadDomainSecurityContext();
+    const enhancedPrompt = `${basePrompt}
+
+${securityContext}
+
+CRITICAL: The above domain security rules are MANDATORY and must be followed exactly.`;
+    return enhancedPrompt;
+  }
+
+  static validateGeneratedCode(code: string): {
+    isValid: boolean;
+    violations: string[];
+    suggestions: string[];
+  } {
+    const violations: string[] = [];
+    const suggestions: string[] = [];
+
+    const externalImageRegex = /https:\/\/[^"]*\.(jpg|jpeg|png|webp|gif|svg)/gi;
+    const matches = code.match(externalImageRegex) || [];
+
+    for (const match of matches) {
+      if (!match.includes('freepik.com') && !match.includes('api.freepik.com') && !match.includes('/images/avatars/')) {
+        violations.push(`External domain detected: ${match}`);
+        suggestions.push(`Replace ${match} with Freepik API`);
+      }
+    }
+
+    const avatarRegex = /\/images\/avatars\/[^"'\s]+\.avif/gi;
+    const avatarMatches = code.match(avatarRegex) || [];
+    if (avatarMatches.length > 0) {
+      const isTestimonials = code.toLowerCase().includes('testimonial') || 
+                           code.toLowerCase().includes('review') ||
+                           code.toLowerCase().includes('customer');
+      if (!isTestimonials) {
+        violations.push('Avatar used outside of testimonials component');
+        suggestions.push('Use Freepik API for images in non-testimonial components');
+      }
+    }
+
+    return { isValid: violations.length === 0, violations, suggestions };
+  }
+
+  static getForbiddenDomainPatterns(): string[] {
+    return [
+      'https://[^"]*\\.(jpg|jpeg|png|webp|gif|svg)'
+    ];
+  }
+
+  static getAllowedDomainPatterns(): string[] {
+    return [
+      'https://img\\.freepik\\.com/.*',
+      'https://api\\.freepik\\.com/.*',
+      '/images/avatars/.*\\.avif'
+    ];
+  }
+
+  static getDomainSecurityWarning(): string {
+    return `🚫 DOMAIN SECURITY WARNING:
+NEVER use ANY external domains except Freepik API and local avatars.
+
+✅ ONLY use:
+- Freepik API for images
+- Local avatars (/images/avatars/*.avif) for testimonials ONLY
+
+VIOLATION = AUTOMATIC REGENERATION`;
+  }
+
+  static isAllowedDomain(url: string): boolean {
+    const allowedPatterns = this.getAllowedDomainPatterns();
+    return allowedPatterns.some(pattern => {
+      const regex = new RegExp(pattern, 'i');
+      return regex.test(url);
+    });
+  }
+
+  static isForbiddenDomain(url: string): boolean {
+    const forbiddenPatterns = this.getForbiddenDomainPatterns();
+    return forbiddenPatterns.some(pattern => {
+      const regex = new RegExp(pattern, 'i');
+      return regex.test(url);
+    });
+  }
+
+  static getReplacementSuggestions(forbiddenUrl: string): string {
+    if (forbiddenUrl.includes('avatar') || forbiddenUrl.includes('profile')) {
+      return 'Use local avatar: /images/avatars/Avatar_man.avif';
+    } else {
+      return 'Use Freepik API: path/to/image (will be replaced automatically)';
+    }
+  }
+}

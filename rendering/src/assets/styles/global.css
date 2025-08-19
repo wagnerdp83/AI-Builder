@@ -1,0 +1,118 @@
+/* 
+ * Global styles with performance optimizations
+ * Only include essential styles here
+ */
+
+/* Base styles */
+:root {
+  --primary-color: #383877;
+  --secondary-color: #fd7503;
+  --neutral-dark: #1e293b;
+  --neutral-medium: #64748b;
+  --neutral-light: #f1f5f9;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Performance optimizations for scrolling and animations */
+html {
+  scroll-behavior: smooth;
+}
+
+main {
+  padding-bottom: 80px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Lazy loading images - core styles */
+.lazy-image {
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.lazy-image.loaded {
+  opacity: 1;
+}
+
+/* Make sure all images have proper display by default */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Optimize for mobile - reduce animation complexity */
+@media (max-width: 768px) {
+  .animate-slow {
+    animation-duration: 30s !important;
+  }
+
+  .reduce-motion {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Content visibility optimizations */
+.defer-visibility {
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 5000px;
+}
+
+@media (max-width: 768px) {
+  .defer-visibility {
+    content-visibility: auto;
+    contain-intrinsic-size: 1px 2500px;
+  }
+}
+
+/* Container for lazy-loaded offscreen content */
+.offscreen-container {
+  visibility: hidden;
+}
+
+.offscreen-container.visible {
+  visibility: visible;
+}
+
+/* LCP optimizations */
+.high-priority-image {
+  content-visibility: auto;
+}
+
+/* Image placeholders */
+.image-placeholder {
+  background-color: #f3f4f6;
+  border-radius: 0.5rem;
+}
+
+/* Overlay animation fade-in */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  animation: fade-in 0.3s ease-in;
+}
+
+/* Optimize for print */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .page-break {
+    page-break-before: always;
+  }
+}

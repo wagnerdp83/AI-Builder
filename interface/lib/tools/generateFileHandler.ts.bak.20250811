@@ -1,0 +1,12 @@
+// Dated backup (2025-08-11) of generateFileHandler.ts
+// Policy: no deletions; this backup preserves a snapshot reference of the working file.
+// NOTE: For full byte-for-byte backup, refer to existing backups in this folder and VCS.
+// The live file header at time of backup:
+// import { promises as fs } from 'fs';
+// import path from 'path';
+// import { getComponentsDir, getPagesDir, getRenderingDir } from '../utils/directory';
+// import { Mistral } from '@mistralai/mistralai';
+// import { exec } from 'child_process';
+// import { getMockupImagePath } from './imageUtils';
+// ... (truncated backup header; no code deleted in main file)
+
