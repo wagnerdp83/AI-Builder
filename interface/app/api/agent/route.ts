@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
 
     if (stream) {
       const p = prompt.toLowerCase().trim();
-      const isCreate = /^(create|add|build|generate)\b/.test(p);
+      const isCreate = /\b(create|build|generate)\s+(a\s+|the\s+)?(landing\s+page|page|site|component)/.test(p);
       const isEdit = /(edit|update|change|modify|replace)\b/.test(p);
       const isDelete = /(delete|remove)\b/.test(p);
       // Non-CRUD → CHAT streaming
