@@ -38,18 +38,46 @@ async function chatAgent(prompt: string) {
 
 type Intent = 'CREATE' | 'EDIT' | 'DELETE' | 'CHAT';
 
-// New Regex-based intent classifier for speed and accuracy on simple commands.
-function getIntentFromPrompt(prompt: string): Intent | null {
+// Enhanced AI-driven intent classifier with regex fallback
+async function getIntentFromPrompt(prompt: string): Promise<Intent | null> {
     const p = prompt.toLowerCase().trim();
 
-    // Bias planning/scope/discovery queries to CHAT
-    const planningKeywords = [
-      'scope', 'project scope', 'planning', 'plan', 'pre-creation', 'pre creation',
-      'discovery', 'requirements', 'specification', 'spec', 'estimate', 'estimation',
-      'proposal', 'roadmap', 'architecture', 'blueprint'
-    ];
-    if (planningKeywords.some(k => p.includes(k))) return 'CHAT';
+    // First, try AI-based intent detection for comprehensive analysis
+    try {
+        const { IntentDetectionService } = await import('../services/intent-detection');
+        const intentResult = await IntentDetectionService.detectIntent(prompt);
+        
+        if (intentResult.success && intentResult.intent) {
+            console.log('[DEBUG] AI Intent Detection Result:', {
+                intent: intentResult.intent.intent,
+                confidence: intentResult.confidence,
+                sections: intentResult.intent.slots.sections?.length || 0
+            });
+            
+            // Map AI intent to orchestrator intent
+            switch (intentResult.intent.intent) {
+                case 'create_website':
+                    return 'CREATE';
+                case 'edit_component':
+                    return 'EDIT';
+                case 'delete_component':
+                    return 'DELETE';
+                case 'chat':
+                default:
+                    // Only return CHAT if confidence is high or no creation indicators
+                    if (intentResult.confidence > 0.7 || !hasCreationIndicators(p)) {
+                        return 'CHAT';
+                    }
+                    break;
+            }
+        }
+    } catch (error) {
+        console.error('[DEBUG] AI intent detection failed, using regex fallback:', error);
+    }
 
+    // Fallback to regex-based classification
+    console.log('[DEBUG] Using regex fallback for intent detection');
+    
     // Pattern for delete: "delete the X component"
     const deleteRegex = /^delete\s*(the)?\s*.*\s*(section|component)/;
     if (deleteRegex.test(p)) return 'DELETE';
@@ -58,11 +86,50 @@ function getIntentFromPrompt(prompt: string): Intent | null {
     const editRegex = /^\w+:\s*(update|change|set|modify|edit|replace)|^(update|change|set|modify|edit|replace)\s*\w+/;
     if (editRegex.test(p)) return 'EDIT';
     
-    // Pattern for create: "create/add/build/generate ..." (more flexible)
-    const createRegex = /^(create|add|build|generate)/;
-    if (createRegex.test(p)) return 'CREATE';
+    // Enhanced CREATE detection - prioritize creation over planning bias
+    if (hasCreationIndicators(p)) {
+        return 'CREATE';
+    }
+
+    // Only bias towards CHAT for pure planning queries without creation intent
+    const planningKeywords = [
+      'scope', 'project scope', 'planning', 'plan', 'pre-creation', 'pre creation',
+      'discovery', 'requirements', 'specification', 'spec', 'estimate', 'estimation',
+      'proposal', 'roadmap', 'architecture', 'blueprint'
+    ];
+    if (planningKeywords.some(k => p.includes(k)) && !hasCreationIndicators(p)) {
+        return 'CHAT';
+    }
 
     return null;
+}
+
+// Helper function to detect creation indicators
+function hasCreationIndicators(prompt: string): boolean {
+    const createKeywords = [
+        'create', 'build', 'generate', 'make', 'develop', 'design',
+        'landing page', 'website', 'page', 'site', 'app', 'application'
+    ];
+    
+    const structuralKeywords = [
+        'section', 'component', 'hero', 'footer', 'header', 'navbar',
+        'gallery', 'testimonials', 'contact', 'about', 'services'
+    ];
+    
+    const hasCreateKeyword = createKeywords.some(k => prompt.includes(k));
+    const hasStructuralKeyword = structuralKeywords.some(k => prompt.includes(k));
+    
+    // Strong creation indicators
+    if (hasCreateKeyword && (hasStructuralKeyword || prompt.includes('for my') || prompt.includes('store') || prompt.includes('business'))) {
+        return true;
+    }
+    
+    // Direct creation commands
+    if (/^(create|build|generate|make|develop|design)\s/i.test(prompt)) {
+        return true;
+    }
+    
+    return false;
 }
 
 function parseComponentFromPrompt(prompt: string): string | undefined {
@@ -125,26 +192,29 @@ export async function orchestratorAgent(req: NextRequest) {
     return { success: false, error: 'Prompt is required' };
   }
 
-  // First, try to classify intent with Regex for speed and reliability.
-  let intent: Intent | null = getIntentFromPrompt(prompt);
-  console.log(`[DEBUG] Regex-based intent classification result: ${intent}`);
+  // Use enhanced AI-driven intent detection with regex fallback
+  let intent: Intent | null = await getIntentFromPrompt(prompt);
+  console.log(`[DEBUG] Enhanced intent classification result: ${intent}`);
   
   if (intent) {
-    console.log(`[Orchestrator] Intent classified by regex as: ${intent}`);
+    console.log(`[Orchestrator] Intent classified as: ${intent}`);
   } else {
-    // If regex fails, fallback to the LLM classifier.
-    console.log(`[Orchestrator] Regex did not match. Falling back to LLM classifier.`);
+    // Final fallback to simple LLM classifier
+    console.log(`[Orchestrator] Enhanced detection failed. Using simple LLM classifier.`);
     const intentSystemPrompt = `You are an orchestrator agent. Your job is to analyze the user's prompt and classify the intent. You must respond with one of the following four intents: 'CREATE', 'EDIT', 'DELETE', 'CHAT'.
-    - 'CREATE': User wants to create something new (e.g., "create a new hero section", "build a page based on this image").
+    - 'CREATE': User wants to create something new (e.g., "create a new hero section", "build a landing page", "make a website").
     - 'EDIT': User wants to modify an existing part of the page (e.g., "change the button color").
     - 'DELETE': User wants to remove something (e.g., "delete the footer").
-    - 'CHAT': User is asking a question or having a conversation.
+    - 'CHAT': User is asking a question or having a conversation without creating/editing.
+    
+    IMPORTANT: Prioritize CREATE for any request that involves building, creating, or generating web content.
+    
     Analyze the following prompt and return only the single word for the intent.`;
     const classifier = new IntentClassifier();
     const intentResult = await classifier.classify(intentSystemPrompt, prompt);
     intent = intentResult.trim().toUpperCase() as Intent;
-    console.log(`[DEBUG] LLM-based intent classification result: ${intent}`);
-    console.log(`[Orchestrator] Intent classified by LLM as: ${intent}`);
+    console.log(`[DEBUG] Simple LLM classification result: ${intent}`);
+    console.log(`[Orchestrator] Intent classified by simple LLM as: ${intent}`);
   }
 
   console.log(`[DEBUG] Entering main switch with intent: ${intent}`);
