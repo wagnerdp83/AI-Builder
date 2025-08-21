@@ -63,14 +63,82 @@ function ensureHeaderFooter(sections: Array<{ title: string; content: string }>)
   return out;
 }
 
+/**
+ * Extracts the content from the "Landing Page Scope" section of the chat HTML.
+ * @param chatHtml The full HTML content from the chat response.
+ * @returns The extracted scope content as a string, or an empty string if not found.
+ */
+export function extractLandingPageScope(chatHtml: string): string {
+  const scopeMarker = '🏗️ Landing Page Scope';
+  const startIndex = chatHtml.indexOf(scopeMarker);
+
+  if (startIndex === -1) {
+    // Fallback for cases where the marker is inside an HTML tag
+    const regex = new RegExp(`>\s*${scopeMarker}\s*<`);
+    const match = chatHtml.match(regex);
+    if (match && typeof match.index === 'number') {
+      const scopeContent = chatHtml.substring(match.index + match[0].length).trim();
+      // Clean up potential closing tags at the beginning
+      return scopeContent.replace(/^\s*<\/[^>]+>\s*/, '');
+    }
+    return ''; // Marker not found
+  }
+
+  // Return everything after the marker
+  const scopeContent = chatHtml.substring(startIndex + scopeMarker.length);
+  return scopeContent.trim();
+}
+
+/**
+ * Detects if the user's prompt indicates a positive intent to create.
+ * @param prompt The user's text prompt.
+ * @returns True if a creation intent is detected, false otherwise.
+ */
+export function detectCreateIntent(prompt: string): boolean {
+  const positiveKeywords = [
+    'yes',
+    'yep',
+    'yup',
+    'ok',
+    'okay',
+    'go ahead',
+    'proceed',
+    'do it',
+    'create it',
+    'build it',
+    'sounds good',
+    'looks good',
+    'perfect',
+    'great',
+    'awesome',
+    'make it',
+  ];
+  const lowerPrompt = prompt.toLowerCase().trim();
+
+  if (positiveKeywords.includes(lowerPrompt)) {
+    return true;
+  }
+
+  return positiveKeywords.some(keyword => lowerPrompt.startsWith(keyword));
+}
+
 export function chatToCreatePrompt(chatHtml: string, originalPrompt?: string): string {
+  const scope = extractLandingPageScope(chatHtml);
+
+  // If a specific scope is found, use it directly to preserve all details.
+  if (scope) {
+    console.log('[ChatToCreate] Extracted scope found. Using it directly for creation.');
+    // We prepend a simple instruction, but the main content is the detailed scope.
+    return `Create a landing page based on this content: ${scope}`;
+  }
+
+  // Fallback to the old logic if the specific scope marker isn't found.
+  console.log('[ChatToCreate] Scope marker not found, using legacy block extraction.');
   const block = findLandingStructureBlock(chatHtml);
-  // If not found, fallback to whole html but still attempt to parse sections
   const source = block || chatHtml;
   let sections = extractSectionsFromBlock(source);
   sections = ensureHeaderFooter(sections);
 
-  // Build a concise CREATE prompt for the Generic pipeline
   const lines: string[] = [];
   lines.push('CREATE landing page');
   if (originalPrompt) lines.push(`Context: ${stripTags(originalPrompt)}`);

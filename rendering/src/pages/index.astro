@@ -4,6 +4,10 @@
 //Default Calls
 import BaseLayout from '../layouts/BaseLayout.astro';
 import SectionWrapper from '../layouts/SectionWrapper.astro';
+import Header from '../components/Header.astro';
+import Hero from '../components/Hero.astro';
+import LeadCaptureForm from '../components/LeadCaptureForm.astro';
+import Footer from '../components/Footer.astro';
 
 
 
@@ -24,6 +28,23 @@ import SectionWrapper from '../layouts/SectionWrapper.astro';
 
 
 
+
+
+    <SectionWrapper id="header">
+      <Header />
+    </SectionWrapper>
+
+    <SectionWrapper id="hero">
+      <Hero />
+    </SectionWrapper>
+
+    <SectionWrapper id="leadcaptureform">
+      <LeadCaptureForm />
+    </SectionWrapper>
+
+    <SectionWrapper id="footer">
+      <Footer />
+    </SectionWrapper>
 
 </main>
 

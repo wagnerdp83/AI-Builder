@@ -182,8 +182,27 @@ export async function orchestratorAgent(req: NextRequest) {
     console.log(`[DEBUG] Orchestrator received FormData. Prompt: "${prompt}"`);
   } else {
     const body = await req.json();
-    prompt = body.prompt;
+    prompt = body.prompt || body.promptContext; // Use promptContext as a fallback
     disambiguation = body.disambiguation;
+
+    // HANDLE CHAT-TO-CREATE FLOW
+    if (body.action === 'create_from_chat' && body.chatHtml) {
+      console.log('[DEBUG] Orchestrator received chat-to-create request.');
+      try {
+        const { ChatToCreateService } = await import('../services/chat-to-create');
+        const chatToCreateService = new ChatToCreateService();
+        const result = await chatToCreateService.execute({
+          chatHtml: body.chatHtml,
+          promptContext: prompt,
+          disambiguation: disambiguation
+        });
+        return { success: true, response: result };
+      } catch (error: any) {
+        console.error('[DEBUG] Error in chat-to-create flow:', error);
+        return { success: false, error: `Chat-to-create failed: ${error.message}` };
+      }
+    }
+
     console.log(`[DEBUG] Orchestrator received JSON. Prompt: "${prompt}"`);
   }
 

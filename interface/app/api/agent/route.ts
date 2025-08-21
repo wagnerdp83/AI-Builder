@@ -41,7 +41,9 @@ async function streamChatResponse(prompt: string): Promise<NextResponse> {
         });
 
         if (!resp.ok || !resp.body) {
-          controller.enqueue(encoder.encode('data: [Error] Failed to start stream\n\n'));
+          const errorBody = await resp.text();
+          console.error(`[Mistral Stream Error] Status: ${resp.status}, Body: ${errorBody}`);
+          controller.enqueue(encoder.encode(`data: [Error] Failed to start stream. Status: ${resp.status}\n\n`));
           controller.close();
           return;
         }
@@ -177,6 +179,7 @@ export async function POST(request: NextRequest) {
     // Parse prompt early for streaming decision
     const body = await request.json();
     const prompt = body?.prompt as string;
+    const chatHtml: string | undefined = body?.chatHtml;
 
     if (!prompt) {
       return NextResponse.json({ success: false, error: 'Prompt is required' }, { status: 400 });
@@ -199,10 +202,37 @@ export async function POST(request: NextRequest) {
     // Default non-streaming path + chat-to-create bridge
     const action = body?.action as string | undefined;
     if (action === 'create_from_chat') {
+      console.log('[AgentRoute] Chat-to-create action triggered.');
       const { chatToCreatePrompt } = await import('@/lib/services/chat-to-create');
       const createPrompt = chatToCreatePrompt(body?.chatHtml || '', body?.promptContext || prompt);
-      const result = await orchestratorAgent(new NextRequest(request.url, { method: 'POST', body: JSON.stringify({ prompt: createPrompt }) } as any));
+      // Pass the generated prompt and the chat-to-create flag to the orchestrator
+      const result = await orchestratorAgent(new NextRequest(request.url, { 
+        method: 'POST', 
+        body: JSON.stringify({ 
+          prompt: createPrompt, 
+          isChatToCreate: true // Signal to bypass analysis
+        }) 
+      } as any));
       return NextResponse.json(result);
+    }
+
+    // Auto-detect positive create confirmations and trigger chat-to-create
+    try {
+      const { detectCreateIntent, chatToCreatePrompt } = await import('@/lib/services/chat-to-create');
+      if (chatHtml && detectCreateIntent(prompt)) {
+        console.log('[AgentRoute] Auto-detected create confirmation. Triggering chat-to-create.');
+        const createPrompt = chatToCreatePrompt(chatHtml, body?.promptContext || prompt);
+        const result = await orchestratorAgent(new NextRequest(request.url, {
+          method: 'POST',
+          body: JSON.stringify({
+            prompt: createPrompt,
+            isChatToCreate: true
+          })
+        } as any));
+        return NextResponse.json(result);
+      }
+    } catch (e) {
+      console.warn('[AgentRoute] Chat-to-create auto-detect unavailable or failed:', (e as any)?.message);
     }
 
     const result = await orchestratorAgent(new NextRequest(request.url, { method: 'POST', body: JSON.stringify({ prompt, disambiguation: body?.disambiguation }) } as any));

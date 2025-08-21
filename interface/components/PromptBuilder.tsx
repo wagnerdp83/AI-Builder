@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, ChevronUp, ChevronDown, X, Send, Square } from 'lucide-react';
+import { Loader2, ChevronUp, ChevronDown, X, Send, Square, Play } from 'lucide-react';
 import ImageUpload from '@/app/components/ImageUpload';
 import Image from 'next/image';
 
@@ -25,6 +25,13 @@ interface Message {
   role: 'user' | 'assistant';
   content: React.ReactNode;
   isPending?: boolean;
+}
+
+// NEW: Interface for stored chat scope
+interface ChatScope {
+  content: string;
+  timestamp: number;
+  originalPrompt?: string;
 }
 
 const INITIAL_MESSAGE: Message = {
@@ -59,6 +66,95 @@ const findMentionedComponents = (prompt: string): string[] => {
         }
     }
     return Array.from(mentioned);
+};
+
+// NEW: Helper to extract scope from chat response
+const extractScopeFromChatResponse = (content: string): string | null => {
+  if (typeof content !== 'string') return null;
+  
+  // Look for the Design & User Experience section first
+  const designSectionMarker = 'Design & User Experience';
+  const designStartIndex = content.indexOf(designSectionMarker);
+  
+  // Look for the Landing Page Scope section
+  const scopeMarker = '🏗️ Landing Page Scope';
+  const scopeStartIndex = content.indexOf(scopeMarker);
+  
+  if (designStartIndex === -1 && scopeStartIndex === -1) return null;
+  
+  let extractedContent = '';
+  
+  // Extract Design & User Experience section if found
+  if (designStartIndex !== -1) {
+    const designEndIndex = scopeStartIndex !== -1 ? scopeStartIndex : content.length;
+    const designContent = content.substring(designStartIndex, designEndIndex);
+    extractedContent += designContent + '\n\n';
+  }
+  
+  // Extract Landing Page Scope section if found
+  if (scopeStartIndex !== -1) {
+    const scopeContent = content.substring(scopeStartIndex + scopeMarker.length);
+    // Remove the ending question if present
+    const cleanScopeContent = scopeContent.replace(/\s*Would you like me to add any extra information to your project scope or would you like me to create your landing page based on this\?.*$/i, '');
+    extractedContent += cleanScopeContent;
+  }
+  
+  // Clean HTML tags and convert to clean plain text
+  const cleanText = extractedContent
+    .replace(/<[^>]*>/g, '') // Remove all HTML tags
+    .replace(/&nbsp;/g, ' ') // Replace HTML entities
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .replace(/\n\s*\n/g, '\n') // Remove empty lines
+    .trim();
+  
+  return cleanText;
+};
+
+// NEW: Helper to extract business context from user's original request
+const extractBusinessContext = (messages: Message[]): { websiteType: string; businessType: string } => {
+  // Find the first user message (excluding initial)
+  const firstUserMessage = messages.find(m => m.role === 'user' && m.id !== 'initial');
+  
+  if (!firstUserMessage || typeof firstUserMessage.content !== 'string') {
+    return { websiteType: 'landing page', businessType: 'business' };
+  }
+  
+  const content = firstUserMessage.content.toLowerCase();
+  
+  // Extract website type
+  let websiteType = 'landing page';
+  if (content.includes('website')) websiteType = 'website';
+  else if (content.includes('landing page')) websiteType = 'landing page';
+  else if (content.includes('app')) websiteType = 'app';
+  else if (content.includes('dashboard')) websiteType = 'dashboard';
+  
+  // Extract business type
+  let businessType = 'business';
+  if (content.includes('real estate')) businessType = 'real estate business';
+  else if (content.includes('restaurant')) businessType = 'restaurant';
+  else if (content.includes('salon')) businessType = 'salon';
+  else if (content.includes('store')) businessType = 'store';
+  else if (content.includes('company')) businessType = 'company';
+  else if (content.includes('agency')) businessType = 'agency';
+  
+  return { websiteType, businessType };
+};
+
+// NEW: Helper to detect creation intent from user response
+const detectCreateIntent = (prompt: string): boolean => {
+  const positiveKeywords = [
+    'yes', 'yep', 'yup', 'ok', 'okay', 'go ahead', 'proceed', 
+    'do it', 'create it', 'build it', 'sounds good', 'looks good', 
+    'perfect', 'great', 'awesome', 'make it'
+  ];
+  
+  const lowerPrompt = prompt.toLowerCase().trim();
+  return positiveKeywords.some(keyword => 
+    lowerPrompt.includes(keyword) || lowerPrompt.startsWith(keyword)
+  );
 };
 
 interface Attachment {
@@ -180,6 +276,32 @@ export default function PromptBuilder({ isLoading, setIsLoading }: PromptBuilder
       .chat-response br {
         display: none;
       }
+
+      /* NEW: Scope action button styles */
+      .scope-action-button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 12px;
+      }
+      
+      .scope-action-button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      }
+      
+      .scope-action-button:active {
+        transform: translateY(0);
+      }
     `;
     document.head.appendChild(style);
     
@@ -193,6 +315,10 @@ export default function PromptBuilder({ isLoading, setIsLoading }: PromptBuilder
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isChatExpanded, setIsChatExpanded] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  
+  // NEW: State for storing chat scope
+  const [storedScope, setStoredScope] = useState<ChatScope | null>(null);
+  
   const { start, cancel, isStreaming } = useChatStream();
 
   // Function to normalize malformed HTML tags only (no word mutation)
@@ -270,6 +396,82 @@ export default function PromptBuilder({ isLoading, setIsLoading }: PromptBuilder
     </span>
   );
 
+  // NEW: Function to bridge from chat scope to create pipeline
+  const bridgeToCreatePipeline = async (scope: ChatScope) => {
+    setIsLoading(true);
+    
+    try {
+      // Extract business context from user's original request
+      const { websiteType, businessType } = extractBusinessContext(messages);
+      
+      // Create a comprehensive scope with business context at the top
+      const comprehensiveScope = `Create a ${websiteType} for my ${businessType} following:
+
+${scope.content}`;
+      
+      // Create the create prompt using the comprehensive scope
+      const createPrompt = `Create a ${websiteType} with these sections: Header, Hero, Lead Capture Form, Footer. Use this detailed specification: ${comprehensiveScope}`;
+      
+      console.log('[Bridge] Sending create prompt:', createPrompt);
+      
+      // Send directly to the create pipeline via the agent API
+      const response = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: createPrompt,
+          mode: 'direct_create_from_chat_scope'
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to create landing page');
+      }
+      
+      // Add success message to chat
+      setMessages(prev => [
+        ...prev,
+        { 
+          id: generateId(), 
+          role: 'user', 
+          content: `Create ${websiteType} from scope (${new Date().toLocaleTimeString()})` 
+        },
+        { 
+          id: generateId(), 
+          role: 'assistant', 
+          content: result.response || result.reasoning || `${websiteType} created successfully!` 
+        }
+      ]);
+      
+      // Clear the stored scope after successful creation
+      setStoredScope(null);
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      console.error('[Bridge] Error creating landing page:', error);
+      
+      // Add error message to chat
+      setMessages(prev => [
+        ...prev,
+        { 
+          id: generateId(), 
+          role: 'user', 
+          content: `Create landing page from scope (${new Date().toLocaleTimeString()})` 
+        },
+        { 
+          id: generateId(), 
+          role: 'assistant', 
+          content: `Error: ${errorMessage}. The create pipeline may have encountered an issue. Please try again or contact support.` 
+        }
+      ]);
+    }
+    
+    setIsLoading(false);
+  };
+
   // Show welcome message only on first visit per session
   useEffect(() => {
     if (sessionStorage.getItem('hasVisitedBuilder') !== 'true') {
@@ -284,6 +486,27 @@ export default function PromptBuilder({ isLoading, setIsLoading }: PromptBuilder
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isChatExpanded]);
+
+  // NEW: Effect to detect and store scope from chat responses
+  useEffect(() => {
+    messages.forEach(message => {
+      if (message.role === 'assistant' && typeof message.content === 'string') {
+        const scope = extractScopeFromChatResponse(message.content);
+        if (scope) {
+          setStoredScope({
+            content: scope,
+            timestamp: Date.now(),
+            originalPrompt: messages.find(m => m.role === 'user' && m.id !== 'initial')?.content as string
+          });
+        }
+      }
+    });
+  }, [messages]);
+
+  // NEW: Helper to check if message contains scope sections
+  const messageContainsScope = (content: string): boolean => {
+    return content.includes('🏗️ Landing Page Scope') || content.includes('Design & User Experience');
+  };
 
   const handleImageSelect = async (file: File) => {
     const reader = new FileReader();
@@ -319,10 +542,19 @@ export default function PromptBuilder({ isLoading, setIsLoading }: PromptBuilder
     setMessages([]);
     setPrompt('');
     setAmbiguousPrompt(null);
+    // NEW: Clear stored scope when starting new chat
+    setStoredScope(null);
   }
 
   const processPrompt = async (currentPrompt: string, disambiguation?: string) => {
     setIsLoading(true);
+    
+    // NEW: Check if this is a create intent response to stored scope
+    if (storedScope && detectCreateIntent(currentPrompt)) {
+      await bridgeToCreatePipeline(storedScope);
+      return;
+    }
+    
     // Decide if this is likely a pipeline (CREATE/EDIT/DELETE) request
     const lp = currentPrompt.trim().toLowerCase();
     const isLikelyPipeline = /^(create|add|build|generate|edit|update|change|modify|replace|delete|remove)\b/.test(lp) || attachments.length > 0 || lp.includes('with these instructions');
@@ -448,13 +680,62 @@ export default function PromptBuilder({ isLoading, setIsLoading }: PromptBuilder
     processPrompt(prompt);
   };
 
+  // NEW: Component to render scope action button
+  const ScopeActionButton = ({ scope }: { scope: ChatScope }) => {
+    const { websiteType, businessType } = extractBusinessContext(messages);
+    
+    return (
+      <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+              🎯 Complete Project Scope Detected
+            </h4>
+            <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
+              Ready to create your {websiteType} for your {businessType}?
+            </p>
+            
+            
+            {/* NEW: Debug scope preview */}
+            <details className="mt-3">
+              <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:underline">
+                📋 Preview extracted scope (click to expand)
+              </summary>
+              <div className="mt-2 p-2 bg-white dark:bg-neutral-700 rounded text-xs text-gray-700 dark:text-gray-300 max-h-32 overflow-y-auto">
+                <div className="mb-2 p-1 bg-blue-50 dark:bg-blue-900/20 rounded text-blue-700 dark:text-blue-300 font-medium">
+                  🔍 Complete Scope (what will be sent to create pipeline):
+                </div>
+                <pre className="whitespace-pre-wrap break-words text-xs">
+                  {(() => {
+                    const { websiteType, businessType } = extractBusinessContext(messages);
+                    return `Create a ${websiteType} for my ${businessType} following:
+
+${scope.content}`;
+                  })()}
+                </pre>
+              </div>
+            </details>
+          </div>
+          <button
+            onClick={() => bridgeToCreatePipeline(scope)}
+            disabled={isLoading}
+            className="scope-action-button disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Play className="w-4 h-4" />
+            Create {websiteType.charAt(0).toUpperCase() + websiteType.slice(1)}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
       <div className="relative bg-[#5c5c5f] dark:bg-neutral-800 rounded-t-lg">
         {/* Chat History */}
         <div 
           ref={scrollRef} 
-          className={`chat-scroll transition-all duration-300 ease-in-out overflow-y-auto space-y-4 p-4 ${isChatExpanded ? 'max-h-[65vh]' : 'max-h-0 !p-0'}`}
+          className={` transition-all duration-300 ease-in-out overflow-y-auto space-y-4 p-4 ${isChatExpanded ? 'max-h-[65vh]' : 'max-h-0 !p-0'}`}
           style={{ scrollbarWidth: 'thin' }}
         >
           {messages.map((message, index) => (
@@ -470,6 +751,14 @@ export default function PromptBuilder({ isLoading, setIsLoading }: PromptBuilder
                 ) : (
                   message.content
                 )}
+                
+                {/* NEW: Show scope action button if this message contains scope */}
+                {message.role === 'assistant' && 
+                 typeof message.content === 'string' && 
+                 storedScope && 
+                 messageContainsScope(message.content) && (
+                  <ScopeActionButton scope={storedScope} />
+                )}
               </div>
             </div>
           ))}
@@ -482,6 +771,29 @@ export default function PromptBuilder({ isLoading, setIsLoading }: PromptBuilder
           )}
         </div>
       </div>
+
+      {/* NEW: Floating scope indicator */}
+      {storedScope && (
+        <div className="fixed bottom-24 right-4 z-50 bg-white dark:bg-neutral-800 rounded-lg shadow-lg border border-gray-200 dark:border-neutral-700 p-3 max-w-xs">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Complete Scope Ready</span>
+          </div>
+          <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+            {(() => {
+              const { websiteType, businessType } = extractBusinessContext(messages);
+              return `${websiteType} for ${businessType} - Design & Scope included`;
+            })()}
+          </p>
+          <button
+            onClick={() => bridgeToCreatePipeline(storedScope)}
+            disabled={isLoading}
+            className="w-full text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            Create Now
+          </button>
+        </div>
+      )}
 
       {/* Main Prompt Input Area */}
       <div className="relative dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-br-lg rounded-bl-lg shadow-lg">
@@ -533,7 +845,7 @@ export default function PromptBuilder({ isLoading, setIsLoading }: PromptBuilder
                   handleSubmit(e as unknown as React.FormEvent);
                 }
               }}
-              placeholder="What do you want to build today?"
+              placeholder={storedScope ? "Type 'yes' or 'create it' to build your landing page, or ask something else..." : "What do you want to build today?"}
               className="placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive field-sizing-content min-h-16 border shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed md:text-sm p-3 pr-28 pb-12 block w-full bg-gray-100 dark:bg-neutral-700 border-transparent rounded-lg text-sm focus:outline-none focus:ring-0 disabled:opacity-50 disabled:pointer-events-none"
               rows={1}
               disabled={isLoading}
