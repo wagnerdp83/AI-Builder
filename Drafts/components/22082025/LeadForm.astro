@@ -1,0 +1,327 @@
+---
+import { Instagram, Facebook, Yelp, Google, Star } from '@lucide/astro';
+
+// Frontmatter constants
+const headline = "Authentic Thai Massage in Orlando – Relax, Recharge, Renew";
+const subheadline = "Experience the healing power of traditional Thai techniques. Reduce stress, ease muscle tension, and restore balance in our tranquil Orlando studio. Perfect for ages 30–60 seeking natural well-being.";
+const benefits = [
+  "Certified Thai therapists with 10+ years of experience",
+  "Tailored sessions for deep relaxation or targeted pain relief",
+  "Conveniently located in [Orlando neighborhood] with flexible hours",
+  "Holistic approach: No oils, no fuss—just pure, authentic Thai massage"
+];
+const ctaButton = "Book Your Session Now";
+const secondaryCta = "Learn More About Our Techniques";
+const trustSignal = "⭐ 4.9/5 (200+ Reviews)";
+const copyright = "© 2024 [Your Studio Name]. All rights reserved. Located in Orlando, FL.";
+const navLinks = [
+  { text: "Home", href: "#" },
+  { text: "About", href: "#" },
+  { text: "Services", href: "#" },
+  { text: "Testimonials", href: "#" },
+  { text: "Contact", href: "#" },
+  { text: "Book Now", href: "#" }
+];
+const socialLinks = [
+  { icon: "Instagram", href: "#" },
+  { icon: "Facebook", href: "#" },
+  { icon: "Yelp", href: "#" },
+  { icon: "Google", href: "#" }
+];
+---
+
+<header class="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-sm shadow-sm bg-teal-100">
+  <div class="container mx-auto px-4 py-4 flex items-center justify-between">
+    <div class="flex items-center">
+      <!-- Logo placeholder -->
+      <div class="w-12 h-12 bg-gradient-to-br from-teal-700 to-orange-600 rounded-full flex items-center justify-center">
+        <span class="text-white font-bold text-xl">T</span>
+      </div>
+      <nav class="hidden md:flex ml-8 space-x-6">
+        {navLinks.map((link) => (
+          <a href={link.href} class="text-gray-800 hover:text-orange-600 transition-colors duration-300">{link.text}</a>
+        ))}
+      </nav>
+    </div>
+    <div class="flex items-center space-x-4">
+      <button class="hidden md:block bg-orange-600 hover:bg-orange-700 text-white px-6 py-2 rounded-full transition-all duration-300 transform hover:scale-105 shadow-md">
+        Book Now
+      </button>
+      <button class="md:hidden" aria-label="Menu">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<section class="relative min-h-screen flex items-center overflow-hidden">
+  <!-- Background video -->
+  <video
+    class="absolute top-0 left-0 w-full h-full object-cover"
+    autoplay
+    loop
+    muted
+    playsinline
+    poster = "https://images.unsplash.com/photo-1712668405876-d0df5c444e62?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NjU0MzV8MHwxfHNlYXJjaHwyfHx0aGVzZSUyMHNob3djYXNlJTIwaW1hZ2V8ZW58MHwwfHx8MTc1NTcyNjE4N3ww&ixlib=rb-4.1.0&q=80&w=1080"
+  >
+    <source src = "https://videos.pexels.com/video-files/33545103/14264213_640_360_25fps.mp4" type="video/mp4">
+  </video>
+
+  <!-- Overlay -->
+  <div class="absolute inset-0 bg-gradient-to-r from-teal-900/70 to-orange-900/50"></div>
+
+  <div class="container mx-auto px-4 py-20 md:py-32 relative z-10">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+      <div class="space-y-8">
+        <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight animate-fade-in">
+          {headline}
+        </h1>
+        <p class="text-xl md:text-2xl text-white/90 animate-fade-in animation-delay-200">
+          {subheadline}
+        </p>
+
+        <div class="space-y-4">
+          {benefits.map((benefit, index) => (
+            <div class="flex items-start space-x-3 animate-fade-in" style={`animation-delay: ${(index + 3) * 200}ms`}>
+              <div class="w-5 h-5 mt-1 flex-shrink-0">
+                <svg class="w-full h-full text-orange-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                </svg>
+              </div>
+              <p class="text-white text-lg">{benefit}</p>
+            </div>
+          ))}
+        </div>
+
+        <div class="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6">
+          <button class="bg-orange-600 hover:bg-orange-700 text-white px-8 py-4 rounded-full text-xl font-medium transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl active:translate-y-px">
+            {ctaButton}
+          </button>
+          <a href="#" class="text-white hover:text-orange-300 transition-colors duration-300 flex items-center space-x-2">
+            <span>{secondaryCta}</span>
+            <span class="text-orange-500">{trustSignal}</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Mobile image -->
+      <div class="md:hidden">
+        <img
+          src = "https://images.unsplash.com/photo-1712668405876-d0df5c444e62?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NjU0MzV8MHwxfHNlYXJjaHwyfHx0aGVzZSUyMHNob3djYXNlJTIwaW1hZ2V8ZW58MHwwfHx8MTc1NTcyNjE4N3ww&ixlib=rb-4.1.0&q=80&w=1080"
+          alt="Certified Thai massage therapist providing deep tissue relief in Orlando studio"
+          class="w-full h-64 object-cover rounded-xl shadow-2xl"
+          loading="lazy"
+        >
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="bg-gray-50 py-16 md:py-24">
+  <div class="container mx-auto px-4">
+    <div class="max-w-2xl mx-auto text-center">
+      <h2 class="text-3xl md:text-4xl font-bold text-gray-800 mb-6">Ready to Experience Thai Massage?</h2>
+      <p class="text-lg text-gray-600 mb-8">Fill out the form below to book your session or request more information.</p>
+
+      <form class="space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              required
+            >
+          </div>
+          <div>
+            <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              required
+            >
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label for="phone" class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+            <input
+              type="tel"
+              id="phone"
+              name="phone"
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            >
+          </div>
+          <div>
+            <label for="service" class="block text-sm font-medium text-gray-700 mb-1">Preferred Service</label>
+            <select
+              id="service"
+              name="service"
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            >
+              <option value="">Select a service</option>
+              <option value="relaxation">Deep Relaxation</option>
+              <option value="pain-relief">Targeted Pain Relief</option>
+              <option value="corporate">Corporate Wellness</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label for="message" class="block text-sm font-medium text-gray-700 mb-1">Additional Information</label>
+          <textarea
+            id="message"
+            name="message"
+            rows="4"
+            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+          ></textarea>
+        </div>
+
+        <div class="flex items-center">
+          <input
+            type="checkbox"
+            id="privacy"
+            name="privacy"
+            class="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+            required
+          >
+          <label for="privacy" class="ml-2 block text-sm text-gray-700">
+            I agree to the <a href="#" class="text-orange-600 hover:text-orange-800">privacy policy</a>
+          </label>
+        </div>
+
+        <button
+          type="submit"
+          class="w-full bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-full text-lg font-medium transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl active:translate-y-px"
+        >
+          Submit Request
+        </button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer class="bg-gray-800 text-white py-12">
+  <div class="container mx-auto px-4">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
+      <div class="space-y-6">
+        <div class="flex items-center">
+          <div class="w-12 h-12 bg-gradient-to-br from-teal-700 to-orange-600 rounded-full flex items-center justify-center">
+            <span class="text-white font-bold text-xl">T</span>
+          </div>
+          <span class="ml-3 text-xl font-bold">[Your Studio Name]</span>
+        </div>
+        <p class="text-gray-300">{copyright}</p>
+      </div>
+
+      <div>
+        <h3 class="text-xl font-semibold mb-6">Quick Links</h3>
+        <nav class="grid grid-cols-2 gap-4">
+          {navLinks.map((link) => (
+            <a href={link.href} class="text-gray-300 hover:text-orange-400 transition-colors duration-300">{link.text}</a>
+          ))}
+        </nav>
+      </div>
+
+      <div>
+        <h3 class="text-xl font-semibold mb-6">Connect With Us</h3>
+        <div class="flex space-x-4">
+          {socialLinks.map((link) => (
+            <a href={link.href} class="text-gray-300 hover:text-orange-400 transition-colors duration-300" aria-label={link.icon}>
+              <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                {link.icon === "Instagram" && (
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5-12c0 .55.45 1 1 1h8c.55 0 1-.45 1-1s-.45-1-1-1h-8c-.55 0-1 .45-1 1zm0 4c0 .55.45 1 1 1h4c.55 0 1-.45 1-1s-.45-1-1-1h-4c-.55 0-1 .45-1 1zm0 4c0 .55.45 1 1 1h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1z"/>
+                )}
+                {link.icon === "Facebook" && (
+                  <path d="M17 2h-3a5 5 0 00-5 5v3H6v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3V2z"/>
+                )}
+                {link.icon === "Yelp" && (
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+                )}
+                {link.icon === "Google" && (
+                  <path d="M12.545 10.239v3.821h5.445c-0.712 2.315-2.647 3.972-5.445 3.972-3.332 0-6.033-2.701-6.033-6.032s2.701-6.032 6.033-6.032c1.498 0 2.866 0.549 3.921 1.453l2.814-2.814C17.503 2.988 15.139 2 12.545 2 7.021 2 2.543 6.477 2.543 12s4.478 10 9.999 10c3.052 0 5.699-1.109 7.502-2.819l-2.344-2.82A7.99 7.99 0 0112.545 18c-4.411 0-8-3.589-8-8s3.589-8 8-8c1.902 0 3.627 0.742 4.898 1.979z"/>
+                )}
+              </svg>
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-12 pt-8 border-t border-gray-700 flex flex-col md:flex-row justify-between items-center">
+      <p class="text-gray-400 text-sm">© 2024 [Your Studio Name]. All rights reserved.</p>
+      <button class="mt-4 md:mt-0 bg-orange-600 hover:bg-orange-700 text-white px-6 py-2 rounded-full transition-all duration-300 transform hover:scale-105 shadow-md">
+        Book Now
+      </button>
+    </div>
+  </div>
+</footer>
+
+<style>
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.6s ease-out forwards;
+    opacity: 0;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+
+  .animation-delay-600 {
+    animation-delay: 600ms;
+  }
+
+  .animation-delay-800 {
+    animation-delay: 800ms;
+  }
+
+  .animation-delay-1000 {
+    animation-delay: 1000ms;
+  }
+</style>
+
+<script>
+  // Mobile menu toggle
+  document.addEventListener('DOMContentLoaded', function() {
+    const menuButton = document.querySelector('header button[aria-label="Menu"]');
+    const mobileMenu = document.querySelector('header nav');
+
+    if (menuButton && mobileMenu) {
+      menuButton.addEventListener('click', function() {
+        mobileMenu.classList.toggle('hidden');
+      });
+    }
+
+    // Video hover effect
+    const video = document.querySelector('video');
+    if (video) {
+      const ctas = document.querySelectorAll('button, a');
+
+      ctas.forEach(cta => {
+        cta.addEventListener('mouseenter', () => {
+          video.pause();
+        });
+
+        cta.addEventListener('mouseleave', () => {
+          video.play();
+        });
+      });
+    }
+  });
+</script>

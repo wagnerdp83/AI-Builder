@@ -1,0 +1,130 @@
+---
+import { MapPin, Star } from '@lucide/astro';
+
+const heroImage = "https://images.unsplash.com/photo-1692822637379-ae834b049833?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NjU0MzV8MHwxfHNlYXJjaHwzfHx0aGVzZSUyMGhlcm8lMjBpbWFnZXxlbnwwfDB8fHwxNzU1NzI2MzY2fDA&ixlib=rb-4.1.0&q=80&w=1080"
+const videoUrl = "https://videos.pexels.com/video-files/20746128/20746128-hd_1280_720_50fps.mp4"
+const logoAlt = "FoxFreela logo"
+const headline = "Your Landing Page, Built by AI in Minutes—Not Days."
+const subheadline = "Describe your business in plain English. FoxFreela turns it into a high-converting page while you sip your coffee. No designers. No code. No guesswork."
+const primaryCta = "Join the Waitlist—Limited Spots"
+const secondaryLink = "See how it works"
+const trustText = "Trusted by 500+ freelancers worldwide"
+const videoAlt = "FoxFreela AI generating a custom landing page in real time";
+---
+
+<section class="relative w-full h-screen overflow-hidden bg-gray-50">
+  <!-- Background Image -->
+  <div class="absolute inset-0 z-0">
+    <img
+      src={heroImage}
+      alt="Luxury Orlando estate with pool and palm trees at dusk"
+      class="w-full h-full object-cover"
+    />
+    <div class="absolute inset-0 bg-gradient-to-b from-navy-900/60 to-navy-900/90"></div>
+  </div>
+
+  <!-- Content Container -->
+  <div class="relative z-10 flex flex-col lg:flex-row items-center justify-center h-full px-4 sm:px-6 lg:px-8">
+    <!-- Left Content - Text -->
+    <div class="w-full lg:w-1/2 text-white mb-12 lg:mb-0 lg:pr-12">
+      <h1 class="text-4xl lg:text-5xl font-bold mb-6 leading-tight">
+        {headline}
+      </h1>
+      <p class="text-xl mb-8">
+        {subheadline}
+      </p>
+
+      <div class="flex flex-col sm:flex-row gap-4">
+        <a
+          href="#"
+          class="bg-orange-500 hover:bg-orange-600 text-white px-8 py-4 rounded-lg text-lg font-medium transition-all duration-300 transform hover:scale-105 flex items-center justify-center"
+        >
+          <span>{primaryCta}</span>
+        </a>
+        <a
+          href="#"
+          class="border-2 border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white px-8 py-4 rounded-lg text-lg font-medium transition-all duration-300 flex items-center justify-center"
+        >
+          <span>{secondaryLink}</span>
+        </a>
+      </div>
+
+      <div class="mt-8 flex items-center">
+        <MapPin class="w-5 h-5 mr-2 text-gold-500" />
+        <span class="text-sm">{trustText}</span>
+      </div>
+    </div>
+
+    <!-- Right Content - Video -->
+    <div class="w-full lg:w-1/2 flex justify-center">
+      <div class="w-full lg:w-4/5">
+        <video
+          src={videoUrl}
+          autoplay
+          loop
+          muted
+          playsinline
+          class="w-full rounded-lg shadow-2xl"
+          aria-label={videoAlt}
+        ></video>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Animation for hero elements
+  document.addEventListener('DOMContentLoaded', () => {
+    const heroContent = document.querySelector('.relative.z-10') as HTMLElement;
+    const ctaButton = document.querySelector('.bg-orange-500') as HTMLElement;
+
+    // Check if elements exist before proceeding
+    if (!heroContent || !ctaButton) {
+      console.warn('Hero elements not found, skipping animations');
+      return;
+    }
+
+    // Fade in animation
+    heroContent.style.opacity = '0';
+    heroContent.style.transform = 'translateY(20px)';
+    heroContent.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+
+    setTimeout(() => {
+      if (heroContent) {
+        heroContent.style.opacity = '1';
+        heroContent.style.transform = 'translateY(0)';
+      }
+    }, 100);
+
+    // CTA button pulse animation
+    setTimeout(() => {
+      if (ctaButton) {
+        ctaButton.style.transform = 'scale(1.05)';
+        setTimeout(() => {
+          if (ctaButton) {
+            ctaButton.style.transform = 'scale(1)';
+          }
+        }, 300);
+      }
+    }, 3000);
+
+    // Button hover effects
+    ctaButton.addEventListener('mouseenter', () => {
+      ctaButton.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+    });
+
+    ctaButton.addEventListener('mouseleave', () => {
+      ctaButton.style.boxShadow = 'none';
+    });
+
+    // Button click effect
+    ctaButton.addEventListener('click', () => {
+      ctaButton.style.transform = 'scale(0.95)';
+      setTimeout(() => {
+        if (ctaButton) {
+          ctaButton.style.transform = 'scale(1)';
+        }
+      }, 100);
+    });
+  });
+</script>
