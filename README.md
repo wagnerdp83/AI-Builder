@@ -1,4 +1,4 @@
-# AI Landing Page Builder - Beta V2
+# AI Landing Page Builder - Beta V3
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
@@ -48,7 +48,7 @@ The AI Landing Page Builder is a cutting-edge system that revolutionizes web dev
 ## 📁 Project Structure
 
 ```
-AI Page Builder - Beta V2/
+AI Page Builder - Beta v3/
 ├── interface/                 # Next.js AI Interface
 │   ├── app/                  # App Router & API routes
 │   ├── lib/                  # AI agents & services
@@ -106,7 +106,7 @@ AI Page Builder - Beta V2/
 
 ```bash
 git clone <your-repo-url>
-cd "AI Page Builder - Beta V2"
+cd "AI Page Builder - Beta v3"
 ```
 
 ### 2. Install Dependencies
