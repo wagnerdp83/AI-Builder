@@ -772,28 +772,7 @@ ${scope.content}`;
         </div>
       </div>
 
-      {/* NEW: Floating scope indicator */}
-      {storedScope && (
-        <div className="fixed bottom-24 right-4 z-50 bg-white dark:bg-neutral-800 rounded-lg shadow-lg border border-gray-200 dark:border-neutral-700 p-3 max-w-xs">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Complete Scope Ready</span>
-          </div>
-          <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-            {(() => {
-              const { websiteType, businessType } = extractBusinessContext(messages);
-              return `${websiteType} for ${businessType} - Design & Scope included`;
-            })()}
-          </p>
-          <button
-            onClick={() => bridgeToCreatePipeline(storedScope)}
-            disabled={isLoading}
-            className="w-full text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50"
-          >
-            Create Now
-          </button>
-        </div>
-      )}
+     
 
       {/* Main Prompt Input Area */}
       <div className="relative dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-br-lg rounded-bl-lg shadow-lg">

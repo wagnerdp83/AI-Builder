@@ -1,0 +1,71 @@
+---
+import { User, Mail, Globe, Star } from '@lucide/astro';
+
+const headline = "Turn More Visitors Into Paying Customers—Without Guesswork"
+const subheadline = "We’ve increased conversions by up to 300% for businesses like yours. Get a free audit to see how much revenue you’re leaving on the table."
+const primaryCTA = "Claim Your Free Audit"
+const secondaryLink = "See how we do it →"
+const formFields = [
+  { id: "name", label: "Full Name", type: "text", icon: User },
+  { id: "email", label: "Email Address", type: "email", icon: Mail },
+  { id: "website", label: "Website URL", type: "url", icon: Globe }
+];
+---
+
+<section class="bg-blue-900 text-white py-16 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-3xl mx-auto">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl font-bold mb-4 animate-fade-in">{headline}</h2>
+      <p class="text-xl mb-8 animate-fade-in animation-delay-200">{subheadline}</p>
+      <a href="#lead-form" class="inline-block bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-full transition duration-300 transform hover:scale-105 animate-fade-in animation-delay-400">
+        {primaryCTA}
+      </a>
+      <p class="mt-4 text-gray-200 hover:text-white transition-colors duration-300">
+        <a href="#how-it-works">{secondaryLink}</a>
+      </p>
+    </div>
+
+    <form id="lead-form" class="space-y-6 max-w-md mx-auto">
+      {formFields.map((field) => (
+        <div  class="relative">
+          <label for={field.id} class="block text-sm font-medium mb-1">{field.label}</label>
+          <div class="relative">
+            <field.icon class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type={field.type}
+              id={field.id}
+              name={field.id}
+              class="w-full pl-10 pr-4 py-3 rounded-lg bg-blue-800 border border-blue-700 focus:border-green-500 focus:ring-2 focus:ring-green-500 transition duration-300"
+              required
+            />
+          </div>
+        </div>
+      ))}
+
+      <button
+        type="submit"
+        class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50"
+      >
+        {primaryCTA}
+      </button>
+    </form>
+  </div>
+</section>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('lead-form');
+
+    if (!form) return;
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      // Form submission logic here
+      console.log('Form submitted');
+
+      // Reset form after submission
+      form.reset();
+    });
+  });
+</script>

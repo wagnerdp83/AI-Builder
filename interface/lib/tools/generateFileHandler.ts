@@ -28,6 +28,42 @@ if (!mistralApiKey) {
 }
 const mistralClient = new Mistral({ apiKey: mistralApiKey });
 
+// Enhanced Mistral client with retry logic for 429 errors
+async function completeChatWithRetry(payload: any, retries = 3, delay = 1000) {
+  let lastError: any;
+
+  if (!mistralApiKey) {
+    throw new Error("The MISTRAL_API_KEY environment variable is missing or empty for chat completion.");
+  }
+
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await mistralClient.chat.complete(payload);
+      if (response && response.choices && response.choices[0]) {
+        return response;
+      }
+      throw new Error('Invalid response format from Mistral API');
+    } catch (error: any) {
+      if ((error.statusCode === 429 || error.status === 429) && i < retries - 1) {
+        console.log(`[GenericPipeline] Rate limited. Retrying in ${delay / 1000}s... (attempt ${i + 1}/${retries})`);
+        await new Promise(res => setTimeout(res, delay));
+        delay *= 2; 
+      } else {
+        console.error("❌ [GenericPipeline] Mistral API call failed:", error.message || error);
+        lastError = error;
+        if (i === retries - 1) break; // Don't continue if last retry
+      }
+    }
+  }
+  
+  // If all retries failed, provide a graceful fallback
+  if (lastError && (lastError.statusCode === 429 || lastError.status === 429)) {
+    throw new Error(`Generic pipeline temporarily unavailable due to API rate limits. Please try again in a few minutes. Original error: ${lastError.message || lastError}`);
+  }
+  
+  throw new Error(`Mistral API call failed after all retries. ${lastError?.message || lastError || 'Unknown error'}`);
+}
+
 // =================================================================================
 // START: Standalone Astro Validator Service
 // =================================================================================
@@ -350,21 +386,56 @@ export class SingleAstroValidator {
 
 const CODEGEN_SYSTEM_PROMPT = `You are a world-class AI developer specializing in creating production-ready Astro components using Tailwind CSS and Preline UI. Your code should be clean, semantic, and follow best practices.
 
-// **CRITICAL DIRECTIVES:**
-// 1.  **ATOMIC COMPONENTS (STRICT):**
-//     *   **ONE SECTION ONLY:** Each component MUST contain ONLY its designated section. If creating a "Menu" component, it should contain ONLY the navigation/menu section. If creating a "Hero" component, it should contain ONLY the hero section. NEVER include multiple sections in a single component.
-//     *   **NO FULL PAGES:** Do NOT create complete landing pages with multiple sections. Each component is a building block that will be assembled into a complete page later.
-//     *   **NO HTML/HEAD/BODY:** Do NOT include <!DOCTYPE html>, <html>, <head>, or <body> tags. These are page-level elements, not component-level elements.
+**CRITICAL DIRECTIVES:**
+1.  **ATOMIC COMPONENTS (STRICT):**
+    *   **ONE SECTION ONLY:** Each component MUST contain ONLY its designated section. If creating a "Menu" component, it should contain ONLY the navigation/menu section. If creating a "Hero" component, it should contain ONLY the hero section. NEVER include multiple sections in a single component.
+    *   **NO FULL PAGES:** Do NOT create complete landing pages with multiple sections. Each component is a building block that will be assembled into a complete page later.
+    *   **NO HTML/HEAD/BODY:** Do NOT include <!DOCTYPE html>, <html>, <head>, or <body> tags. These are page-level elements, not component-level elements.
 
-// 2.  **TECH STACK:**
-//     *   **Astro:** Generate a valid, single-file Astro component (.astro).
-//     *   **Tailwind CSS:** All styling MUST be done with Tailwind CSS utility classes.
-//     *   **Preline UI:** You MUST use Preline UI components (see https://preline.co/ for components like headers, dropdowns, cards, etc.) to create modern, professional-looking layouts. This is a strict requirement for design consistency.
+2.  **TECH STACK:**
+    *   **Astro:** Generate a valid, single-file Astro component (.astro).
+    *   **Tailwind CSS:** All styling MUST be done with Tailwind CSS utility classes.
+    *   **Preline UI:** You MUST use Preline UI components (see https://preline.co/ for components like headers, dropdowns, cards, etc.) to create modern, professional-looking layouts. This is a strict requirement for design consistency.
 
-// 3.  **CODE QUALITY:**
-//     *   **Correct Tag Usage:** You MUST use the correct, top-level semantic HTML tag. For example, a component named \`Footer\` MUST use a \`<footer>\` tag, not \`<header>\`. A component named \`Testimonial\` or \`Hero\` should use a \`<section>\` tag.
-//     *   **Semantic HTML:** Use appropriate HTML5 tags like \`<header>\`, \`<nav>\`, \`<section>\`, \`<figure>\`, etc. For a navigation bar, use \`<header>\` and \`<nav>\`.
-//     *   **Data Separation (Strict):** You MUST separate content from presentation. ALL text content (headings, paragraphs, button text, labels, etc.), link URLs, and lists of items MUST be defined as constants in the \`---\` frontmatter. The HTML body must then reference these variables. **There are no exceptions to this rule; do not hardcode ANY text directly in the HTML body.**
+3.  **JAVASCRIPT PATTERNS (CRITICAL - NO EXCEPTIONS):**
+    *   **NEVER use reactive variables** like @click or {variable} in templates - Astro doesn't support this
+    *   **ALWAYS use IDs** for DOM manipulation instead of reactive state
+    *   **ALWAYS wrap JavaScript in DOMContentLoaded** event listener
+    *   **ALWAYS add null checks** before accessing DOM elements
+    *   **ALWAYS type map function parameters** explicitly: (item: { name: string; href: string })
+    *   **Mobile menus MUST use ID-based toggling** with proper event listeners
+    *   **Use this exact mobile menu pattern:**
+      \`\`\`astro
+      <button id="mobile-menu-toggle" class="md:hidden">
+        <Menu class="h-6 w-6" id="menu-icon" />
+        <X class="h-6 w-6 hidden" id="close-icon" />
+      </button>
+      <div id="mobile-menu" class="hidden">
+        <!-- Menu content -->
+      </div>
+      <script>
+        document.addEventListener('DOMContentLoaded', () => {
+          const toggle = document.getElementById('mobile-menu-toggle');
+          const menu = document.getElementById('mobile-menu');
+          const menuIcon = document.getElementById('menu-icon');
+          const closeIcon = document.getElementById('close-icon');
+          
+          if (!toggle || !menu || !menuIcon || !closeIcon) return;
+          
+          toggle.addEventListener('click', () => {
+            const isOpen = !menu.classList.contains('hidden');
+            menu.classList.toggle('hidden');
+            menuIcon.classList.toggle('hidden', isOpen);
+            closeIcon.classList.toggle('hidden', !isOpen);
+          });
+        });
+      </script>
+      \`\`\`
+
+4.  **CODE QUALITY:**
+    *   **Correct Tag Usage:** You MUST use the correct, top-level semantic HTML tag. For example, a component named \`Footer\` MUST use a \`<footer>\` tag, not \`<header>\`. A component named \`Testimonial\` or \`Hero\` should use a \`<section>\` tag.
+    *   **Semantic HTML:** Use appropriate HTML5 tags like \`<header>\`, \`<nav>\`, \`<section>\`, \`<figure>\`, etc. For a navigation bar, use \`<header>\` and \`<nav>\`.
+    *   **Data Separation (Strict):** You MUST separate content from presentation. ALL text content (headings, paragraphs, button text, labels, etc.), link URLs, and lists of items MUST be defined as constants in the \`---\` frontmatter. The HTML body must then reference these variables. **There are no exceptions to this rule; do not hardcode ANY text directly in the HTML body.**
 //     *   **Dynamic & Reusable:** Avoid hardcoding content. For navigation links, generate anchor links (e.g., \`href="#faq"\`) based on the item name. For logos or brand names, use a generic placeholder like "Logo" or "Brand Name" that is easy for the user to replace.
 //     *   **Production-Ready:** The generated component must be complete and ready to use. No "Lorem Ipsum" or unfinished parts.
 
@@ -468,7 +539,42 @@ const SINGLE_CODEGEN_SYSTEM_PROMPT = `You are a world-class AI developer special
     *   **Tailwind CSS:** All styling MUST be done with Tailwind CSS utility classes.
     *   **Preline UI:** You MUST use Preline UI components (see https://preline.co/ for components like headers, dropdowns, cards, etc.) to create modern, professional-looking layouts. This is a strict requirement for design consistency.
 
-3.  **IMAGES AND VISUAL CONTENT (CRITICAL):**
+3.  **JAVASCRIPT PATTERNS (CRITICAL - NO EXCEPTIONS):**
+    *   **NEVER use reactive variables** like @click or {variable} in templates - Astro doesn't support this
+    *   **ALWAYS use IDs** for DOM manipulation instead of reactive state
+    *   **ALWAYS wrap JavaScript in DOMContentLoaded** event listener
+    *   **ALWAYS add null checks** before accessing DOM elements
+    *   **ALWAYS type map function parameters** explicitly: (item: { name: string; href: string })
+    *   **Mobile menus MUST use ID-based toggling** with proper event listeners
+    *   **Use this exact mobile menu pattern:**
+      \`\`\`astro
+      <button id="mobile-menu-toggle" class="md:hidden">
+        <Menu class="h-6 w-6" id="menu-icon" />
+        <X class="h-6 w-6 hidden" id="close-icon" />
+      </button>
+      <div id="mobile-menu" class="hidden">
+        <!-- Menu content -->
+      </div>
+      <script>
+        document.addEventListener('DOMContentLoaded', () => {
+          const toggle = document.getElementById('mobile-menu-toggle');
+          const menu = document.getElementById('mobile-menu');
+          const menuIcon = document.getElementById('menu-icon');
+          const closeIcon = document.getElementById('close-icon');
+          
+          if (!toggle || !menu || !menuIcon || !closeIcon) return;
+          
+          toggle.addEventListener('click', () => {
+            const isOpen = !menu.classList.contains('hidden');
+            menu.classList.toggle('hidden');
+            menuIcon.classList.toggle('hidden', isOpen);
+            closeIcon.classList.toggle('hidden', !isOpen);
+          });
+        });
+      </script>
+      \`\`\`
+
+4.  **IMAGES AND VISUAL CONTENT (CRITICAL):**
     *   **ALWAYS INCLUDE IMAGES:** Every component MUST include relevant images, icons, and visual elements. This is NOT optional.
     *   **Image Sources:** Use high-quality images from:
 
@@ -1457,7 +1563,7 @@ async function runGenericCreatePipeline({ componentNames, prompt }: CreateGeneri
       console.log('🌸 [GenericPipeline] IR mode active: generating Component IR (no code).');
       const irSystem = 'Return ONLY strict JSON for a component spec. No code, no markdown.';
       const irUser = `Create a JSON spec (version 1.0) for component ${componentName} using semantic HTML, Tailwind tokens, placeholders only ({{MOCKUP_IMAGE}}, {{AVATAR_IMAGE}}, {{VIDEO_URL}}), lucide icons list, interactions, constants, layout, theme, a11y. User request + requirements:\n\n${prompt}\n\n${componentRequirements}`;
-      const irResp: any = await mistralClient.chat.complete({
+      const irResp: any = await completeChatWithRetry({
         model: 'codestral-2405',
         messages: [ { role: 'system', content: irSystem }, { role: 'user', content: irUser } ],
         temperature: 0.0,
@@ -1469,7 +1575,7 @@ async function runGenericCreatePipeline({ componentNames, prompt }: CreateGeneri
       const valid = validateIR(ir);
       if (!valid.valid) {
         console.warn('🌸 [GenericPipeline] IR validation failed, attempting one-shot repair');
-        const repair = await mistralClient.chat.complete({
+        const repair = await completeChatWithRetry({
           model: 'codestral-2405',
           messages: [
             { role: 'system', content: irSystem },
@@ -1518,6 +1624,79 @@ STRICT RULES:
 - Do NOT include <style> blocks or inline styles; only minimal <script> blocks if functionality is necessary.
 - Return ONLY the raw Astro code, no markdown.
 
+CRITICAL ACCURACY REQUIREMENTS (NO EXCEPTIONS):
+- ALWAYS extract and use the EXACT business name, location, and specific details from user request
+- ALWAYS implement the EXACT color scheme specified (deep red = red-800, forest green = green-800)
+- ALWAYS use the EXACT headline and subheadline text provided in examples
+- ALWAYS implement the EXACT button styling and interactions described
+- ALWAYS include the EXACT navigation menu items specified
+- ALWAYS follow the EXACT layout and positioning requirements
+- ALWAYS implement the EXACT animation and micro-interaction specifications
+- ALWAYS use the EXACT typography requirements (sans-serif headlines, serif body text)
+- ALWAYS include the EXACT cultural and location-specific context mentioned
+- NEVER use markdown formatting (** or __) - use proper HTML tags instead
+- NEVER substitute generic content when specific content is provided
+- NEVER ignore location-specific details (e.g., "Japan", "photography studio")
+- NEVER use placeholder text when exact text is specified in user request
+
+JAVASCRIPT PATTERNS (CRITICAL - NO EXCEPTIONS):
+- NEVER use reactive variables like @click or {variable} in templates - Astro doesn't support this
+- ALWAYS use IDs for DOM manipulation instead of reactive state
+- ALWAYS wrap JavaScript in DOMContentLoaded event listener
+- ALWAYS add null checks before accessing DOM elements
+- ALWAYS type map function parameters explicitly: (item: { name: string; href: string })
+- Mobile menus MUST use ID-based toggling with proper event listeners
+- Use this exact mobile menu pattern:
+  \`\`\`astro
+  <button id="mobile-menu-toggle" class="md:hidden">
+    <Menu class="h-6 w-6" id="menu-icon" />
+    <X class="h-6 w-6 hidden" id="close-icon" />
+  </button>
+  <div id="mobile-menu" class="hidden">
+    <!-- Menu content -->
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const toggle = document.getElementById('mobile-menu-toggle');
+      const menu = document.getElementById('mobile-menu');
+      const menuIcon = document.getElementById('menu-icon');
+      const closeIcon = document.getElementById('close-icon');
+      
+      if (!toggle || !menu || !menuIcon || !closeIcon) return;
+      
+      toggle.addEventListener('click', () => {
+        const isOpen = !menu.classList.contains('hidden');
+        menu.classList.toggle('hidden');
+        menuIcon.classList.toggle('hidden', isOpen);
+        closeIcon.classList.toggle('hidden', !isOpen);
+      });
+    });
+  </script>
+  \`\`\`
+
+COMPONENT-SPECIFIC REQUIREMENTS:
+- HERO: MUST include fade-in animations for headline and CTA, scale-up hover effects, EXACT headline text from user request
+- HEADER: MUST center logo, use EXACT CTA text specified, implement EXACT button styling
+- FOOTER: MUST include centered logo at top, circular social icons, repeated navigation menu
+- LEADFORM: MUST use EXACT color scheme, include business-specific context
+
+CONTENT EXTRACTION REQUIREMENTS (CRITICAL):
+- ALWAYS extract the EXACT business type from user request (e.g., "photography studio", "cloud security", "real estate")
+- ALWAYS extract the EXACT location details (e.g., "Japan", "Orlando", "New York")
+- ALWAYS extract the EXACT target audience (e.g., "families aged 25-55", "IT managers", "investors")
+- ALWAYS extract the EXACT service offerings (e.g., "family portraits", "cloud security", "luxury homes")
+- ALWAYS use the EXACT business name if provided
+- NEVER generate generic content when specific business details are available
+- NEVER ignore industry-specific terminology and requirements
+
+GENERIC COMPONENT PREVENTION (CRITICAL):
+- NEVER create generic "Studio Logo" when business name is specified
+- NEVER create generic "Photography Studio" when specific business type is mentioned
+- NEVER use placeholder text like "your business" when actual business details are provided
+- NEVER ignore specific industry requirements and best practices
+- ALWAYS implement business-specific features and terminology
+- ALWAYS include location-specific cultural context when mentioned
+
 HERO SECTION REQUIREMENTS (CRITICAL):
 - When creating Hero sections, analyze the user request dynamically to understand what elements are needed.
 - If user requests "background video", include full-screen video element using {{VIDEO_URL}} with proper overlay.
@@ -1527,6 +1706,15 @@ HERO SECTION REQUIREMENTS (CRITICAL):
   - Hero structure should adapt dynamically to user requirements.
   - Use intelligent layout decisions based on the specific user request.
   - Content positioning should be responsive to the component's needs.
+
+PHOTOGRAPHY STUDIO HERO REQUIREMENTS (CRITICAL):
+- MUST use EXACT headline text: "Capture Life's Most Precious Moments with Timeless Photography in Japan"
+- MUST include Japan-specific subheadline: "Our studio specializes in creating natural, heartfelt portraits that tell your family's story. Serving individuals and families in [City] with elegance and professionalism."
+- MUST use deep red (red-800) or forest green (green-800) for primary CTA button
+- MUST include fade-in animations: "animate-fade-in" for headline, "animate-fade-in animation-delay-200" for subheadline, "animate-fade-in animation-delay-400" for CTA
+- MUST implement scale-up hover effect: "transform hover:scale-105" on CTA button
+- MUST use secondary link: "View Our Gallery →" styled as underlined text in muted gray
+- MUST include proper alt text for background image mentioning Japan and family portraits
 
 VIDEO REQUIREMENTS:
 - When user requests background video or video content, analyze their specific needs and include appropriate <video> elements.
@@ -1540,15 +1728,64 @@ FEATURED PRODUCTS GALLERY REQUIREMENTS:
 - Product card content should match what the user actually requested.
 - Use intelligent layout decisions based on the user's specific requirements.
 
+HEADER/NAVBAR REQUIREMENTS (CRITICAL):
+- MUST center the logo at the top as specified in user request
+- MUST use EXACT CTA text: "Book Now" (not "Get in Touch" or other variations)
+- MUST style CTA button as outlined button in muted gray (border-gray-300 text-gray-600)
+- MUST include EXACT navigation menu: "Home", "Gallery", "Services", "About", "Contact"
+- MUST ensure header remains fixed at top for easy access during scrolling
+- MUST implement proper mobile menu with ID-based toggling
+
 CRITICAL ACCURACY REQUIREMENTS:
 - Follow user requirements EXACTLY - create rich, feature-complete components.
 - Respect interactions and behaviors described in the user intent (e.g., before/after transforms, galleries, bookings) without assuming a fixed theme or palette.
 - If user specifies "Background Video", ALWAYS include video element.
 - If user specifies "featured products", ALWAYS include product gallery.
 
+FOOTER REQUIREMENTS (CRITICAL):
+- MUST include centered logo placeholder at the top as specified
+- MUST style social media icons as circular, minimalist style (rounded-full with proper sizing)
+- MUST include copyright line: "© [Year] [Your Studio Name]. All rights reserved."
+- MUST repeat navigation menu from header below social icons, centered and styled in muted gray
+- MUST use proper spacing and hierarchy as specified in user request
+
+LEADFORM REQUIREMENTS (CRITICAL):
+- MUST use EXACT color scheme: deep red (red-800) or forest green (green-800) for submit button
+- MUST include business-specific context and messaging
+- MUST implement proper form validation and accessibility
+- MUST use consistent styling with the overall design theme
+
 ICON REQUIREMENTS:
 - Import ALL necessary Lucide icons for the component functionality based on usage in the template.
-- Prefer descriptive icon names (e.g., Scissors, User, Calendar, Star, Heart, Eye for "View" icons).`;
+- Prefer descriptive icon names (e.g., Scissors, User, Calendar, Star, Heart, Eye for "View" icons).
+
+USER SPECIFICATION EXTRACTION (CRITICAL):
+- ALWAYS extract the EXACT business name, location, and industry from user request
+- ALWAYS use the EXACT headline, subheadline, and CTA text provided in examples
+- ALWAYS implement the EXACT color scheme specified (deep red = red-800, forest green = green-800)
+- ALWAYS include the EXACT cultural and location-specific context mentioned
+- ALWAYS follow the EXACT layout, positioning, and styling requirements
+- NEVER substitute generic content when specific content is provided
+- NEVER ignore location-specific details (e.g., "Japan", "photography studio")
+- NEVER use placeholder text when exact text is specified in user request
+
+BUSINESS CONTEXT AWARENESS (CRITICAL):
+- ALWAYS identify the business type and industry from user request
+- ALWAYS extract location-specific details (country, city, cultural context)
+- ALWAYS use the EXACT business name provided or mentioned
+- ALWAYS implement industry-specific terminology and messaging
+- ALWAYS include cultural relevance when specified (e.g., Japan-specific content)
+- NEVER create generic components when business-specific details are provided
+- NEVER ignore industry-specific requirements and best practices
+
+ANIMATION AND INTERACTION REQUIREMENTS (CRITICAL):
+- ALWAYS implement fade-in animations for headlines and CTAs as specified
+- ALWAYS include scale-up hover effects on buttons when requested
+- ALWAYS use proper animation delays and durations
+- ALWAYS implement smooth transitions and micro-interactions
+- ALWAYS ensure animations enhance user experience without being distracting
+- NEVER skip animation requirements when they are explicitly specified
+- NEVER use generic animations when specific ones are requested`;
 
     // Inject domain security context
     const systemPrompt = await DomainSecurityService.injectIntoSystemPrompt(baseSystemPrompt);
@@ -1566,7 +1803,7 @@ ICON REQUIREMENTS:
     
     console.log('🌸 [GenericPipeline] Dynamic prompts generated successfully');
     
-    const response = await mistralClient.chat.complete({
+    const response = await completeChatWithRetry({
       model: 'codestral-2405',
       messages: [
         {
@@ -1795,7 +2032,7 @@ Generate ONLY the video background HTML code that:
 
 Return ONLY the video HTML code, no explanations.`;
 
-          const videoResponse = await mistralClient.chat.complete({
+          const videoResponse = await completeChatWithRetry({
             model: process.env.MISTRAL_AGENT_ID || 'codestral-2405',
             messages: [
               {
@@ -1891,7 +2128,7 @@ Generate ONLY the missing HTML/Astro code to complete this component.
 
 Return ONLY the HTML code, no explanations.`;
 
-          const completionResponse = await mistralClient.chat.complete({
+          const completionResponse = await completeChatWithRetry({
             model: process.env.MISTRAL_AGENT_ID || 'codestral-2405',
             messages: [
               {

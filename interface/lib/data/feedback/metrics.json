@@ -1,0 +1,18 @@
+{
+  "total_requests": 27,
+  "successful_requests": 13,
+  "failed_requests": 14,
+  "average_processing_time": 845401539540.6296,
+  "common_errors": {
+    "other_error": 14
+  },
+  "intent_accuracy": {
+    "create_website": 0.48148148148148145
+  },
+  "component_success_rates": {
+    "Header": 0.48148148148148145,
+    "Hero": 0.48148148148148145,
+    "Footer": 0.48148148148148145,
+    "Lead Capture Form": 0.5
+  }
+}
