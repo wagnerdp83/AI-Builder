@@ -78,3 +78,5 @@ scripts/output-clean/
 *.md
 !README.md
 !CURSOR_DEVELOPMENT_RULES.md
+Docs/
+Drafts/
